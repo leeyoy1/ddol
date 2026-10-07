@@ -32,7 +32,7 @@ function addDesign(name, pts, made) {
 // 받침 있으면 을, 없으면 를(한글이 아니면 「을(를)」)
 const eulReul = w => { const c = w.charCodeAt(w.length - 1); return c >= 0xAC00 && c <= 0xD7A3 ? ((c - 0xAC00) % 28 ? '을' : '를') : '을(를)'; };
 // 위 안내·아래 안내판에 가리지 않게 지도를 맞춘다
-const fit = (b, pad = 24) => map.fitBounds(b, { maxZoom: 16, paddingTopLeft: [pad, $('top').offsetHeight + pad], paddingBottomRight: [pad, $('sheet').offsetHeight + pad] });
+const fit = (b, pad = 24) => map.fitBounds(b, { maxZoom: 16, paddingTopLeft: [pad, $('top').offsetHeight + pad + 40], paddingBottomRight: [pad, $('sheet').offsetHeight + pad] });
 
 // ---------- 지도 ----------
 const map = L.map('map', { zoomControl: false }).setView([37.5665, 126.978], 13);
@@ -90,7 +90,7 @@ async function setEnd(lat, lon) {
   endMarker = pin(end, '', far ? '너무 멀어요' : '여기서 끝', 'var(--path-back)', far ? 'below far' : 'below').addTo(map)
     .on('click', () => { clearEnd(); status('끝낼 곳을 지웠어요. 출발점으로 돌아오는 산책이에요.'); });
   endMarker.getElement()?.setAttribute('aria-label', '여기서 끝 — 누르면 지우기');
-  status(far ? '거기까지는 걸어가기엔 멀어요. 조금 더 가까운 곳을 눌러 주세요.' : '찍은 곳에서 끝나는 산책이에요. 「산책 뽑기」를 누르세요.');
+  status(far ? '거기까지는 걸어가기엔 멀어요. 조금 더 가까운 곳을 눌러 주세요.' : '찍은 곳에서 끝나는 산책이에요. 「산책 뽑기」를 누르세요. 끝 표시를 다시 누르면 지워져요.');
 }
 map.on('click', e => {
   if (mode !== 'plan' || watchId != null) return;
@@ -185,18 +185,22 @@ function drawPlan(p) {
   for (const m of p.mats || []) matMarkers.set(m.k, L.marker(m.ll, { icon: L.divIcon({ className: 'mpin t' + m.t, iconSize: null, html: '<div>단</div>' }) })
     .addTo(planLayer).bindTooltip(esc(`${m.n} · 시청 결제 ${esc(Number(m.v).toLocaleString())}건`)));
   const e = emoji(p.shape), n = esc(shapeName(p));
-  $('info').innerHTML = `<div class="ttl">${p.gold ? '반짝 ' : ''}${e} ${n} 산책 <span class="sub">${p.dir}쪽 ${p.distKm} km</span></div>
-       <div class="where">도착 <span id="place">${p.place ? esc(p.place) : '근처 이름을 찾는 중…'}</span></div>
+  $('info').innerHTML = `<div class="ttl">${p.gold ? '반짝 ' : ''}${e} ${n} 산책 <span class="sub">출발점에서 ${p.dir}쪽 ${p.distKm} km</span></div>
        <ol class="steps">
          <li><i class="sw go"></i><span>✏️까지 가기</span><b>${p.goKm} km</b></li>
          <li><i class="sw loop"></i><span>${n} 그리며 한 바퀴(${p.turn} 방향)</span><b>${p.loopKm} km</b></li>
          <li><i class="sw back"></i><span>${p.oneWay ? `<span id="endPlace">${esc(p.endPlace || '찍은 곳')}</span>까지 가기` : '출발점으로 돌아오기'}</span><b>${p.backKm} km</b></li>
        </ol>
-       ${matListHtml(p)}
-       <div class="meta">모두 ${p.totalKm} km${p.oneWay ? ` · 그리기 ${(p.goKm + p.loopKm).toFixed(1)} km` : ''}${p.minutes ? ` · ${p.minutes}분쯤 · 도형만 그려요` : ''}${p.likeness ? ` · 길이 모양을 닮은 정도 ${stars5(p.likeness)}(별이 많을수록 또렷해요)` : ''} · 모양 길(파란 실선)의 60%를 지나면 별이 돼요</div>${p.backBy ? `
-       <div class="meta"><label>돌아갈 시각 <input type="time" id="backBy" value="${esc(p.backBy)}"></label> · 앱을 켜 둔 동안 상태줄로 알려드려요</div>` : ''}
-       <details class="promise"${p.promise ? ' open' : ''}><summary>이 산책을 약속하기</summary><label>언제 걸을까요 <input type="datetime-local" id="promise" value="${esc(p.promise || '')}"></label>
-         <small>그 시각 15분 안에 「걷기 시작」을 누르면 한 등급 밝은 별이 떠요. 못 지켜도 별은 그대로예요.</small></details>`;
+       <div class="meta">모두 ${p.totalKm} km(모양 길 ${p.loopKm} + 오가는 길 ${(p.goKm + p.backKm).toFixed(2)}) · 모양 길의 60%를 지나면 별</div>${p.backBy ? `
+       <div class="meta"><label>돌아갈 시각 <input type="time" id="backBy" value="${esc(p.backBy)}"></label> · 화면을 켜 두면 위 띠로 알려요</div>` : ''}
+       <details class="more"><summary>자세히</summary>
+         <div class="meta">모양 그리는 곳: <span id="place">${p.place ? esc(p.place) : '근처 이름을 찾는 중…'}</span></div>
+         ${p.likeness ? `<div class="meta">길이 모양을 닮은 정도 ${stars5(p.likeness)} — 골목이 모양을 얼마나 따라가는지예요. 별의 밝기(등성)는 걸은 비율로 따로 정해져요</div>` : ''}
+         ${p.minutes ? `<div class="meta">${p.minutes}분쯤 산책은 짧게 그리느라 도형(별·하트·세모 등)만 나와요</div>` : ''}
+         ${matListHtml(p)}
+         <details class="promise"${p.promise ? ' open' : ''}><summary>나와 약속하기 — 이 시각에 걷기</summary><label>언제 걸을까요 <input type="datetime-local" id="promise" value="${esc(p.promise || '')}"></label>
+           <small>나 혼자 하는 약속이에요(아무에게도 보내지 않아요). 그 시각 15분 안에 「걷기 시작」을 누르면 한 등급 밝은 별이 떠요. 못 지켜도 별은 그대로예요.</small></details>
+       </details>`;
   $('bWalk').disabled = $('bGpx').disabled = false;
   $('bDone').disabled = !(store.get('track', null)?.id === p.id);
   // 가게를 누르면 목록을 접고(지도를 가리지 않게) 그 가게로 간다
@@ -322,12 +326,16 @@ $('bDone').onclick = () => {
   status(`${s.gold ? '반짝 별' : '새 별'}이 떴어요. 별 ${stars.stars.length}개째예요.`);
   const su = K.suName(K.suIndex(s.ll)), suNew = !before.some(x => Array.isArray(x.ll) && K.suIndex(x.ll) === K.suIndex(s.ll));
   const DIR = { 북방현무: '북쪽', 동방청룡: '동쪽', 남방주작: '남쪽', 서방백호: '서쪽' };
-  const notes = [`서울시청에서 ${DIR[su.group]} ${su.name}수 칸${suNew ? '을 처음 채웠어요(도감의 28칸 성도)' : ''}`, (s.mats || []).length ? `단골집 도장 ${s.mats.length}곳` : '', kept ? '약속을 지켜 한 등급 밝게' : '', ontime != null ? `정각 도착(${ontime >= 0 ? '+' : ''}${ontime}초)` : '', skipped ? `못 걷는 길 ${Math.round(skipped * 100)}%를 빼고 판정` : '', firstOfKind ? '도감에 새로 올랐어요' : '', ...unlocked.map(a => `업적 「${esc(a.title)}」`)].filter(Boolean);
+  const notes = [`모양 길의 ${Math.round(cov * 100)}%를 걸었어요${skipped ? ` (못 가는 길 ${Math.round(skipped * 100)}%는 빼고 셌어요)` : ''}`,
+    `서울시청에서 본 ${DIR[su.group]} 칸 「${su.name}수」${suNew ? '을 처음 채웠어요 — 도감의 둥근 판에 칠해져요' : '에 별이 하나 더 떴어요'}`,
+    kept ? '약속한 시각에 걸어서 한 등급 더 밝아요' : '', ontime != null ? `돌아갈 시각에 딱 맞춰 왔어요(${Math.abs(ontime)}초 ${ontime > 0 ? '늦게' : ontime < 0 ? '일찍' : '차이 없이'})` : '',
+    (s.mats || []).length ? `단골집 도장 ${s.mats.length}곳` : '', firstOfKind ? '모양 도감에 새로 올랐어요' : '',
+    unlocked.length ? `업적: ${unlocked.map(a => esc(a.title)).join(' · ')}` : ''].filter(Boolean);
   const GR = ['', '가장 밝은 별', '밝은 별', '보통 별', '흐린 별', '아주 흐린 별'];
-  $('info').innerHTML = `<div class="cele">${emoji(s.shape)} ${esc(shapeName(s))} · ${s.grade}등성(${GR[s.grade]})
-      <small>모양 길의 ${Math.round(cov * 100)}%를 따라 걸었어요${notes.length ? ' · ' + notes.join(' · ') : ''}</small></div>
+  $('info').innerHTML = `<div class="cele">${emoji(s.shape)} ${esc(shapeName(s))} · ${s.grade}등성(${GR[s.grade]})</div>
+    <ul class="got">${notes.map(x => `<li>${x}</li>`).join('')}</ul>
     <div class="row" style="margin-top:6px"><button id="bCard">작품 카드 만들기</button><button id="bDex2">도감 보기</button></div>${skip.length ? `
-    <div class="row" style="margin-top:6px"><button id="bReport">못 걷는 길 알림 문구 복사</button></div>` : ''}`;
+    <div class="row" style="margin-top:6px"><button id="bReport">못 가는 길 — 응답소·안전신문고에 붙일 문구 복사</button></div>` : ''}`;
   if (skip.length) $('bReport').onclick = () => copyReport(skip);
   setFold(false, false);
   $('bCard').onclick = () => saveCard(s);
@@ -457,7 +465,7 @@ $('fImport').onchange = async e => {
 const WALK_M_PER_MIN = 75; // 4.5 km/h — 가정이라 단추에 「쯤」을 붙인다
 const LENS = {
   km: { short: { radius: 500, size: 300, label: '짧게 · 2~3.5 km' }, mid: { radius: 1000, size: 400, label: '보통 · 4.5~6 km' }, long: { radius: 2000, size: 600, label: '길게 · 6 km 이상' } },
-  min: { short: { radius: 250, size: 150, min: 20, label: '20분쯤 · 1.5 km' }, mid: { radius: 350, size: 200, min: 30, label: '30분쯤 · 1.9 km' }, long: { radius: 500, size: 300, min: 40, label: '40분쯤 · 2.8 km' } },
+  min: { short: { radius: 250, size: 150, min: 20, label: '20분쯤 · 1.5 km' }, mid: { radius: 350, size: 200, min: 30, label: '30분쯤 · 2 km' }, long: { radius: 500, size: 300, min: 40, label: '40분쯤 · 3 km' } },
 };
 const lens = () => LENS[store.get('unit', 'km')] || LENS.km;
 const curLen = () => Object.keys(lens()).find(k => lens()[k].radius === +store.get('radius', 1000) && lens()[k].size === +store.get('size', 400));
@@ -650,6 +658,7 @@ $('bSkip').onclick = () => {
   const here = tr.pts[tr.pts.length - 1], skip = [...(tr.skip || []), here];
   const before = C.skippedFrac(plan.loopLL, tr.skip || []), after = C.skippedFrac(plan.loopLL, skip);
   if (after === before) return status('여기는 모양 길에서 멀어요. 모양 길 위에서 눌러 주세요.');
+  if (!(tr.skip || []).length && !confirm('이 근처 모양 길(약 50 m)을 별 판정에서 뺄까요?\n계단·막힌 길처럼 못 가는 곳에서 눌러 주세요. 길을 다시 짜 주지는 않아요.')) return;
   if (after > C.SKIP_MAX) return status(before ? `모양 길의 ${Math.round(C.SKIP_MAX * 100)}%까지만 뺄 수 있어요. 다른 날 다시 걸어도 좋아요.`
     : '이 근처는 모양 길이 여러 번 겹쳐 지나서 한 번에 너무 많이 빠져요. 조금 옮겨서 눌러 주세요.');
   tr.skip = skip; store.set('track', tr);

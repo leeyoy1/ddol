@@ -76,7 +76,7 @@ svg.i{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-widt
   background:var(--panel);border-top:2px solid var(--navy)}
 #fold{display:flex;width:100%;max-width:520px;margin:0 auto;min-height:26px;border:0;background:transparent;padding:6px 0 4px;touch-action:none;cursor:grab;justify-content:center}
 #fold span{display:block;width:40px;height:4px;background:var(--rule)}
-#fold em{display:none;font-style:normal;font-size:12px;color:var(--ink-2);margin-left:8px}
+#fold em{display:none;font-style:normal;font-size:14px;font-weight:600;color:var(--ink);margin-left:8px}
 #sheet.folded #fold{align-items:center}
 #sheet.folded #fold em{display:inline}
 .seg{margin-bottom:var(--space-sm)}
@@ -129,12 +129,16 @@ button.icon{flex:0 0 50px}
 .tag{display:inline-block;font-size:12px;font-weight:600;color:var(--tag);margin-right:6px}
 #info .where{margin:4px 0;color:var(--ink)}
 #info .steps{list-style:none;margin:var(--space-sm) 0 var(--space-xs);padding:0;color:var(--ink);border-top:1px solid var(--line)}
-#info .steps li{display:flex;align-items:center;gap:var(--space-sm);padding:6px 0;border-bottom:1px solid var(--line)}
+#info .steps li{display:flex;align-items:center;gap:var(--space-sm);padding:3px 0;border-bottom:1px solid var(--line)}
 #info .steps li span{flex:1}
 #info .sw{display:inline-block;width:22px;height:0;border-top:3px dotted var(--path-go)}
 #info .sw.loop{border-top:3px solid var(--accent)}
 #info .sw.back{border-top-color:var(--path-back)}
 #info .meta{font-size:12px;color:var(--sub);margin-top:4px}
+#info .more{margin-top:4px;font-size:12px;color:var(--sub)}
+#info .more summary{cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+#info .got{margin:6px 0 0;padding-left:18px;font-size:13px;color:var(--ink);line-height:1.6}
+#sheet.active .unit{display:none}
 #info .cele{font-size:17px;color:var(--ink)}
 #info .cele small{display:block;font-size:13px;font-weight:400;color:var(--sub);margin-top:2px}
 #info .row button{min-height:42px;font-size:14px}
@@ -243,7 +247,7 @@ details.adv summary{cursor:pointer;font-size:14px;color:var(--ink-2)}
   <div class="row r2">
     <button id="bWalk" disabled><svg class="i"><use href="#i-walk"/></svg>걷기 시작</button>
     <button id="bDone" disabled><svg class="i"><use href="#i-stamp"/></svg>다녀왔어요</button>
-    <button id="bSkip" hidden aria-label="여긴 못 걷겠어요 — 이 근처 모양 길을 판정에서 빼기">못 걷는 길</button>
+    <button id="bSkip" hidden aria-label="이 길 못 가요 — 이 근처 모양 길을 별 판정에서 빼기">이 길 빼기</button>
   </div>
   <div class="tabs">
     <button id="bSky"><svg class="i"><use href="#i-moon"/></svg><span>밤하늘</span></button>
