@@ -34,6 +34,34 @@ dialog p{font-size:13px;color:var(--sub);line-height:1.5}
 .night{filter:invert(1) hue-rotate(180deg) brightness(.45) contrast(.9)}
 .lbl{color:#c9d6ff;font-size:13px;white-space:nowrap;text-shadow:0 0 4px #000}
 .me{width:16px;height:16px;border-radius:50%;background:#2e86ab;border:3px solid #fff;box-shadow:0 0 0 2px rgba(46,134,171,.4)}
+/* 말풍선 핀 — 꼬리 끝이 그 지점 */
+.pinwrap{background:none;border:none}
+.pin{position:absolute;left:0;top:0;transform:translate(-50%,calc(-100% - 9px));display:inline-flex;align-items:center;gap:4px;white-space:nowrap;
+  background:#fff;color:#2b2f3a;border:2px solid var(--c);border-radius:999px;padding:2px 10px 2px 4px;font:700 12px system-ui,sans-serif;box-shadow:0 3px 8px rgba(0,0,0,.25)}
+.pin .e{font-size:20px;line-height:1.2}
+.pin::after{content:'';position:absolute;left:50%;bottom:-10px;transform:translateX(-50%);border:6px solid transparent;border-top:9px solid var(--c)}
+.pin.below{transform:translate(-50%,10px)} /* 아래로 여는 말풍선 — 위쪽의 도착 핀과 겹치지 않게 */
+.pin.below::after{bottom:auto;top:-15px;border-top-color:transparent;border-bottom:9px solid var(--c)}
+.pin.big{padding:4px 12px 4px 6px;font-size:13px;animation:bob 1.6s ease-in-out infinite}
+.pin.big .e{font-size:30px}
+@keyframes bob{0%,100%{transform:translate(-50%,calc(-100% - 9px))}50%{transform:translate(-50%,calc(-100% - 15px))}}
+@media (prefers-reduced-motion:reduce){.pin.big{animation:none}}
+/* 안내판 */
+#info .ttl{font-size:16px;font-weight:800;color:var(--ink)}
+#info .ttl .sub{font-size:13px;font-weight:600;color:var(--sub);margin-left:4px}
+#info .where{margin:4px 0;color:var(--ink)}
+#info .steps{margin:6px 0 4px;padding-left:20px;color:var(--ink)}
+#info .steps li{margin:2px 0}
+#info .steps b{float:right;font-weight:700}
+#info .sw{display:inline-block;width:18px;height:0;margin-right:6px;vertical-align:middle;border-top:4px dotted #2e86ab}
+#info .sw.loop{border-top:4px solid #ff6b6b}
+#info .sw.back{border-top-color:#7d8597}
+#info .meta{font-size:12px;color:var(--sub)}
+/* 밤하늘 */
+.skyewrap{background:none;border:none}
+.skye{position:absolute;transform:translate(-50%,-150%);font-size:16px;filter:drop-shadow(0 0 4px rgba(255,243,176,.8))}
+.glow{filter:drop-shadow(0 0 6px #fff3b0)}
+#cPrev{display:block;margin:8px auto 0;background:var(--bg);border:1px solid var(--line);border-radius:12px}
 </style>
 </head>
 <body>
@@ -58,6 +86,14 @@ dialog p{font-size:13px;color:var(--sub);line-height:1.5}
 <dialog id="dSet">
   <form method="dialog">
     <h3 style="margin:4px 0">설정</h3>
+    <label>무엇을 그릴까요</label>
+    <select id="sPick"><option value="all">전부 무작위 🎲</option><option value="geo">도형 ⭐💗🔺</option><option value="animal">동물 🐟🐱🐰🐳</option><option value="plant">식물 🌷🌸🌲🌵</option><option value="custom">내 그림 🖼️</option></select>
+    <label>내 그림</label>
+    <div class="row"><button type="button" id="bUpload" class="sub">그림 올리기</button></div>
+    <input type="file" id="fImg" accept="image/*" hidden>
+    <p id="customName">아직 올린 그림이 없어요</p>
+    <canvas id="cPrev" width="160" height="160" hidden></canvas>
+    <p>단색 바탕 위에 또렷한 그림이 잘 돼요. 그림 자체는 저장하지 않고 윤곽선만 이 폰에 남겨요. 동물·식물·내 그림은 알아볼 수 있게 지름을 600 m 이상으로 그려요.</p>
     <label>반경(출발점에서 도착지까지)</label>
     <select id="sRadius"><option value="1000">1 km</option><option value="1500">1.5 km</option><option value="2000" selected>2 km</option><option value="3000">3 km</option></select>
     <label>모양 크기(지름)</label>

@@ -17,14 +17,38 @@ export function shapes() {
   }
   const heart = linspace(0, 2 * Math.PI, 40).map(t => [16 * Math.sin(t) ** 3 / 16,
     (13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t)) / 16]);
+  // 꽃: 꽃잎 다섯 장(장미 곡선)
+  const flower = linspace(0, 2 * Math.PI, 61).map(t => { const r = 0.55 + 0.45 * Math.cos(5 * t); return [r * Math.sin(t), r * Math.cos(t)]; });
   return {
     square: [[-1, -1], [1, -1], [1, 1], [-1, 1], [-1, -1]],
     triangle: [[0, 1], [0.87, -0.5], [-0.87, -0.5], [0, 1]],
     star, heart,
     circle: linspace(0, 2 * Math.PI, 36).map(t => [Math.cos(t), Math.sin(t)]),
+    // 동물·식물: 길 위에서 알아볼 만큼 굵은 실루엣(코·귀·꼬리 같은 특징 한두 개만)
+    fish: [[1, 0], [0.7, 0.35], [0.3, 0.5], [-0.2, 0.42], [-0.55, 0.15], [-1, 0.5], [-0.85, 0], [-1, -0.5], [-0.55, -0.15], [-0.2, -0.42], [0.3, -0.5], [0.7, -0.35], [1, 0]],
+    cat: [[-0.8, -0.6], [-0.95, 0], [-0.8, 0.45], [-0.75, 1], [-0.35, 0.62], [0.35, 0.62], [0.75, 1], [0.8, 0.45], [0.95, 0], [0.8, -0.6], [0.4, -0.9], [-0.4, -0.9], [-0.8, -0.6]],
+    rabbit: [[-0.6, -0.7], [-0.75, -0.2], [-0.55, 0.2], [-0.6, 1], [-0.3, 1], [-0.2, 0.3], [0.2, 0.3], [0.3, 1], [0.6, 1], [0.55, 0.2], [0.75, -0.2], [0.6, -0.7], [0, -0.95], [-0.6, -0.7]],
+    whale: [[1, -0.1], [0.85, 0.35], [0.4, 0.5], [-0.2, 0.4], [-0.6, 0.15], [-0.8, 0.6], [-1, 0.75], [-0.95, 0.35], [-0.75, 0], [-0.5, -0.3], [0, -0.45], [0.6, -0.45], [1, -0.1]],
+    leaf: [[0, -1], [0.5, -0.5], [0.6, 0.1], [0.35, 0.6], [0, 1], [-0.35, 0.6], [-0.6, 0.1], [-0.5, -0.5], [0, -1]],
+    tree: [[-0.15, -1], [-0.15, -0.45], [-0.8, -0.45], [-0.35, 0.05], [-0.65, 0.05], [-0.25, 0.5], [-0.45, 0.5], [0, 1], [0.45, 0.5], [0.25, 0.5], [0.65, 0.05], [0.35, 0.05], [0.8, -0.45], [0.15, -0.45], [0.15, -1], [-0.15, -1]],
+    tulip: [[-0.6, 0.9], [-0.3, 0.55], [0, 0.95], [0.3, 0.55], [0.6, 0.9], [0.65, 0.2], [0.4, -0.25], [0.12, -0.35], [0.12, -1], [-0.12, -1], [-0.12, -0.35], [-0.4, -0.25], [-0.65, 0.2], [-0.6, 0.9]],
+    flower,
+    cactus: [[-0.2, -1], [-0.2, 0.1], [-0.55, 0.1], [-0.55, 0.6], [-0.35, 0.6], [-0.35, 0.3], [-0.2, 0.3], [-0.2, 1], [0.2, 1], [0.2, 0.45], [0.35, 0.45], [0.35, 0.8], [0.55, 0.8], [0.55, 0.25], [0.2, 0.25], [0.2, -1], [-0.2, -1]],
   };
 }
-export const SHAPE_KO = { star: '별', triangle: '세모', heart: '하트', square: '네모', circle: '동그라미' };
+export const SHAPE_KO = { star: '별', triangle: '세모', heart: '하트', square: '네모', circle: '동그라미',
+  fish: '물고기', cat: '고양이', rabbit: '토끼', whale: '고래', leaf: '나뭇잎', tree: '나무', tulip: '튤립', flower: '꽃', cactus: '선인장', custom: '내 그림' };
+export const EMOJI = { star: '⭐', triangle: '🔺', heart: '💗', square: '🟦', circle: '⭕',
+  fish: '🐟', cat: '🐱', rabbit: '🐰', whale: '🐳', leaf: '🍃', tree: '🌲', tulip: '🌷', flower: '🌸', cactus: '🌵', custom: '🖼️' };
+export const CATEGORY = {
+  geo: ['star', 'triangle', 'heart', 'square', 'circle'],
+  animal: ['fish', 'cat', 'rabbit', 'whale'],
+  plant: ['leaf', 'tree', 'tulip', 'flower', 'cactus'],
+};
+// 그림 모양은 거꾸로 서면 못 알아본다 → ±30°까지만 돌린다. 세부가 있어 최소 크기도 키운다
+export const isFigure = s => !CATEGORY.geo.includes(s);
+export const FIGURE_ANGLES = [-30, -15, 0, 15, 30].map(d => d * Math.PI / 180);
+export const FIGURE_MIN_SIZE = 600;
 
 // ---------- 그래프 ----------
 // G = { nodes: Map(id -> {x, y, adj: [[id, w, hw], ...]}) }
@@ -145,11 +169,13 @@ export function score(G, path, target) {
   return [s1 / (k + 1) + s2 / (k2 + 1), RL];
 }
 
-export function search(G, unit, size, maxKm, { step, rots = 24, shifts = [0], scales = [0.8, 1.0, 1.2], center = [0, 0] } = {}) {
+// angles를 주면 그 회전만 본다(그림 모양은 ±30°). 없으면 rots등분 — Python판과 같다
+export function search(G, unit, size, maxKm, { step, rots = 24, angles = null, shifts = [0], scales = [0.8, 1.0, 1.2], center = [0, 0] } = {}) {
   step = step || Math.max(40, size / 12);
+  angles = angles || Array.from({ length: rots }, (_, r) => 2 * Math.PI * r / rots);
   let best = null;
-  for (const sc of scales) for (let r = 0; r < rots; r++) for (const dx of shifts) for (const dy of shifts) {
-    const tgt = placeShape(unit, size * sc, 2 * Math.PI * r / rots, center[0] + dx, center[1] + dy);
+  for (const sc of scales) for (const ang of angles) for (const dx of shifts) for (const dy of shifts) {
+    const tgt = placeShape(unit, size * sc, ang, center[0] + dx, center[1] + dy);
     const p = route(G, tgt, step);
     if (!p) continue;
     const [s, L] = score(G, p, tgt);
@@ -161,7 +187,6 @@ export function search(G, unit, size, maxKm, { step, rots = 24, shifts = [0], sc
 
 // ---------- 원정 ----------
 export const GOOD = new Set(['footway', 'pedestrian', 'path', 'living_street', 'residential', 'track', 'unclassified', 'cycleway']);
-export const SHAPE_LIST = ['star', 'triangle', 'heart', 'square', 'circle'];
 
 export function rng(seed) { // mulberry32 — 같은 시드면 같은 원정
   let a = seed >>> 0;
@@ -185,17 +210,25 @@ export function grade(devRatio, newFrac) {
   return Math.min(5, g + (newFrac < 0.3 ? 1 : 0));
 }
 
-export function plan(G, proj, start, radius, size, seed, onTry) {
+const COMPASS = ['동', '북동', '북', '북서', '서', '남서', '남', '남동'];
+const pathLen = (G, p) => { let s = 0; for (let i = 0; i + 1 < p.length; i++) { const a = G.nodes.get(p[i]), b = G.nodes.get(p[i + 1]); s += Math.hypot(a.x - b.x, a.y - b.y); } return s; };
+
+// pick: 'all' | 'geo' | 'animal' | 'plant' | 'custom'. custom이면 custom = {name, pts}(단위 좌표 윤곽)
+export function plan(G, proj, start, radius, size, seed, { pick = 'all', custom = null, onTry } = {}) {
   const R = rng(seed), cand = candidates(G, start, radius);
   if (!cand.length) throw new Error('조건에 맞는 도착지가 없어요 — 반경을 바꿔 보세요');
-  const s0 = nearest(G, start);
-  let best = null, p = null, shape = null;
+  if (pick === 'custom' && !(custom && custom.pts && custom.pts.length >= 4)) throw new Error('먼저 설정에서 내 그림을 올려 주세요');
+  const pool = pick === 'all' ? [...CATEGORY.geo, ...CATEGORY.animal, ...CATEGORY.plant] : pick === 'custom' ? ['custom'] : CATEGORY[pick];
+  const S = shapes(), s0 = nearest(G, start);
+  let best = null, p = null, shape = null, sz = size;
   for (let i = 0; i < 8 && !best; i++) { // 모양을 못 그리는 자리면 다른 도착지
     p = cand[Math.floor(R() * cand.length)];
-    shape = SHAPE_LIST[Math.floor(R() * SHAPE_LIST.length)];
+    shape = pool[Math.floor(R() * pool.length)];
     onTry && onTry(i + 1);
-    const n = G.nodes.get(p);
-    best = search(G, shapes()[shape], size, 5, { rots: 12, scales: [0.9, 1.1], center: [n.x, n.y] });
+    const n = G.nodes.get(p), fig = isFigure(shape);
+    sz = fig ? Math.max(size, FIGURE_MIN_SIZE) : size;
+    best = search(G, shape === 'custom' ? custom.pts : S[shape], sz, 6,
+      fig ? { angles: FIGURE_ANGLES, scales: [0.9, 1.1], center: [n.x, n.y] } : { rots: 12, scales: [0.9, 1.1], center: [n.x, n.y] });
   }
   if (!best) throw new Error('여덟 번 뽑아도 모양을 그릴 자리가 없었어요');
   const go = shortest(G, s0, best.path[0]), back = shortest(G, best.path[best.path.length - 1], s0);
@@ -210,11 +243,23 @@ export function plan(G, proj, start, radius, size, seed, onTry) {
   const xs = best.tgt.map(q => q[0]), ys = best.tgt.map(q => q[1]);
   const usedSize = Math.hypot(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) / Math.SQRT2;
   const ll = id => { const n = G.nodes.get(id); return proj.ll(n.x, n.y).map(v => +v.toFixed(6)); };
+  // 모양 한가운데(도착지 표시)와, 출발점에서 본 방향·거리
+  const cx = (Math.max(...xs) + Math.min(...xs)) / 2, cy = (Math.max(...ys) + Math.min(...ys)) / 2;
+  const st = G.nodes.get(s0), ang = Math.atan2(cy - st.y, cx - st.x);
+  const dir = COMPASS[((Math.round(ang / (Math.PI / 4)) % 8) + 8) % 8];
+  // 그리는 방향: 고리 경로의 부호 있는 넓이(y 위쪽) > 0 이면 반시계
+  let area = 0;
+  for (let i = 0; i + 1 < best.path.length; i++) { const a = G.nodes.get(best.path[i]), b = G.nodes.get(best.path[i + 1]); area += a.x * b.y - b.x * a.y; }
   return {
     id: new Date().toISOString().slice(2, 10).replaceAll('-', '') + '-' + seed, shape, seed,
-    star: ll(p), devM: +best.dev.toFixed(1), devRatio: +(best.dev / usedSize).toFixed(4),
-    loopKm: +(best.len / 1000).toFixed(2), totalKm: +(total / 1000).toFixed(2),
-    loopLL: best.path.map(ll), fullLL: full.map(ll), tgtLL: best.tgt.map(([x, y]) => proj.ll(x, y)), edgeLen,
+    customName: shape === 'custom' ? custom.name || '내 그림' : null,
+    star: ll(p), center: proj.ll(cx, cy).map(v => +v.toFixed(6)), loopStart: ll(best.path[0]),
+    dir, distKm: +(Math.hypot(cx - st.x, cy - st.y) / 1000).toFixed(1), turn: area > 0 ? '반시계' : '시계',
+    devM: +best.dev.toFixed(1), devRatio: +(best.dev / usedSize).toFixed(4), sizeM: Math.round(sz),
+    goKm: +(pathLen(G, go) / 1000).toFixed(2), loopKm: +(best.len / 1000).toFixed(2), backKm: +(pathLen(G, back) / 1000).toFixed(2),
+    totalKm: +(total / 1000).toFixed(2),
+    goLL: go.map(ll), loopLL: best.path.map(ll), backLL: back.map(ll), fullLL: full.map(ll),
+    tgtLL: best.tgt.map(([x, y]) => proj.ll(x, y)), edgeLen,
   };
 }
 
@@ -223,7 +268,7 @@ export function done(rec, walked, stars) {
   for (const [k, l] of Object.entries(rec.edgeLen)) { tot += l; if (!(k in walked)) nw += l; }
   const frac = tot ? nw / tot : 0;
   Object.assign(walked, rec.edgeLen);
-  const star = { id: rec.id, date: rec.id.slice(0, 6), shape: rec.shape, ll: rec.star, loopLL: rec.loopLL,
+  const star = { id: rec.id, date: rec.id.slice(0, 6), shape: rec.shape, name: rec.customName || null, ll: rec.center || rec.star, loopLL: rec.loopLL,
     newKm: +(nw / 1000).toFixed(2), newFrac: +frac.toFixed(3), grade: grade(rec.devRatio, frac) };
   stars.stars.push(star);
   return star;

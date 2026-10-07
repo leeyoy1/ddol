@@ -1,5 +1,6 @@
-// 동네 별자리 — 폰 화면. 계산은 core.js, 도로망은 tiles/ (make_tiles.py 산출)
+// 동네 별자리 — 폰 화면. 계산은 core.js, 그림 윤곽은 outline.js, 도로망은 tiles/ (make_tiles.py 산출)
 import * as C from './core.js';
+import { outlineFromRGBA } from './outline.js';
 
 const $ = id => document.getElementById(id);
 const store = {
@@ -7,9 +8,14 @@ const store = {
   set(k, v) { try { localStorage.setItem('ws_' + k, JSON.stringify(v)); } catch { status('폰 저장 공간에 쓰지 못했어요 — 「기록 내보내기」로 백업하세요'); } },
 };
 const status = t => { $('status').textContent = t; };
-const info = t => { $('info').textContent = t; };
-// 툴팁·라벨은 HTML로 들어간다 — 가져온 기록 파일의 글이 코드로 실행되지 않게 바꿔 넣는다
+// 툴팁·라벨·안내판은 HTML로 들어간다 — 가져온 기록 파일·파일 이름의 글이 코드로 실행되지 않게 바꿔 넣는다
 const esc = v => String(v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const shapeName = p => p.shape === 'custom' ? (p.customName || p.name || '내 그림') : C.SHAPE_KO[p.shape] || '';
+const emoji = s => C.EMOJI[s] || '⭐';
+// 받침 있으면 을, 없으면 를(한글이 아니면 「을(를)」)
+const eulReul = w => { const c = w.charCodeAt(w.length - 1); return c >= 0xAC00 && c <= 0xD7A3 ? ((c - 0xAC00) % 28 ? '을' : '를') : '을(를)'; };
+// 위 안내·아래 안내판에 가리지 않게 지도를 맞춘다
+const fit = (b, pad = 24) => map.fitBounds(b, { paddingTopLeft: [pad, $('status').offsetHeight + pad + 10], paddingBottomRight: [pad, $('sheet').offsetHeight + pad] });
 
 // ---------- 지도 ----------
 const map = L.map('map', { zoomControl: false }).setView([37.5665, 126.978], 13);
@@ -31,13 +37,19 @@ function setBase(kind, night) {
 }
 setBase(store.get('base', 'osm'), false);
 
+// 말풍선 핀: 꼬리 끝이 그 지점을 가리킨다
+const pin = (ll, e, text, color, cls = '') => L.marker(ll, {
+  icon: L.divIcon({ className: 'pinwrap', iconSize: null, html: `<div class="pin ${cls}" style="--c:${color}"><span class="e">${e}</span>${text ? `<span>${esc(text)}</span>` : ''}</div>` }),
+  zIndexOffset: cls === 'big' ? 1000 : 500,
+});
+
 const planLayer = L.layerGroup().addTo(map), skyLayer = L.layerGroup(), meLayer = L.layerGroup().addTo(map);
 let start = null, startMarker = null, plan = store.get('plan', null), track = [], watchId = null;
 
 function setStart(lat, lon, why) {
   start = [lat, lon];
   if (startMarker) map.removeLayer(startMarker);
-  startMarker = L.circleMarker(start, { radius: 8, color: '#2e86ab', weight: 3, fillOpacity: .2 }).addTo(map).bindTooltip('출발');
+  startMarker = pin(start, '🚩', '출발', '#2e86ab').addTo(map);
   status(`출발점을 정했어요(${why}). 「원정 뽑기」를 누르세요.`);
 }
 map.on('click', e => { if (mode === 'plan' && watchId == null) setStart(e.latlng.lat, e.latlng.lng, '지도에서 고름'); });
@@ -66,33 +78,67 @@ async function loadGraph(lat, lon, radius) {
   return { proj, G: C.buildGraph(tiles, proj, radius, INDEX.hw_names) };
 }
 
+// 도착지 근처 이름(OpenStreetMap 역지오코딩) — 도착지 좌표만 보낸다. 실패하면 이름 없이 간다
+async function placeName(ll) {
+  try {
+    const u = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=18&accept-language=ko&lat=${ll[0]}&lon=${ll[1]}`;
+    const j = await (await fetch(u)).json(), a = j.address || {};
+    const parts = [j.name, a.road || a.pedestrian || a.footway, a.quarter || a.neighbourhood || a.suburb || a.city_district];
+    return [...new Set(parts.filter(Boolean))].slice(0, 2).join(' · ') || null;
+  } catch { return null; }
+}
+
 // ---------- 원정 ----------
 function drawPlan(p) {
   planLayer.clearLayers();
-  if (!p) return;
-  L.polyline(p.tgtLL, { color: '#888', dashArray: '6 6', weight: 2 }).addTo(planLayer);
-  L.polyline(p.fullLL, { color: '#e4572e', weight: 5, opacity: .85 }).addTo(planLayer);
-  L.circleMarker(p.star, { radius: 9, color: '#b8860b', fillColor: '#f5c542', fillOpacity: 1 }).addTo(planLayer).bindTooltip('도착지 — 여기서 모양을 그려요');
-  map.fitBounds(L.polyline(p.fullLL).getBounds().pad(0.15));
-  info(`${C.SHAPE_KO[p.shape]} 원정 · 왕복 ${p.totalKm} km (모양 ${p.loopKm} km) · 어긋남 ${p.devM} m`);
+  if (!p) { $('info').innerHTML = ''; return; }
+  const legacy = !p.goLL; // 예전 판 원정(가는 길·돌아오는 길 구분 없음)
+  L.polyline(p.tgtLL, { color: '#9aa3b8', dashArray: '4 6', weight: 2 }).addTo(planLayer);
+  if (legacy) L.polyline(p.fullLL, { color: '#e4572e', weight: 5, opacity: .85 }).addTo(planLayer);
+  else {
+    L.polyline(p.goLL, { color: '#2e86ab', weight: 5, opacity: .85, dashArray: '1 9', lineCap: 'round' }).addTo(planLayer);
+    L.polyline(p.backLL, { color: '#7d8597', weight: 4, opacity: .7, dashArray: '1 9', lineCap: 'round' }).addTo(planLayer);
+    L.polyline(p.loopLL, { color: '#ff6b6b', weight: 6, opacity: .9 }).addTo(planLayer);
+    pin(p.loopStart, '✏️', '여기서 그리기 시작', '#ff6b6b', 'below').addTo(planLayer);
+  }
+  // 도착 핀은 모양 위쪽 가장자리에 — 가운데에 두면 그릴 모양을 덮는다
+  const topLat = Math.max(...p.tgtLL.map(q => q[0])), midLon = p.tgtLL.reduce((s, q) => s + q[1], 0) / p.tgtLL.length;
+  pin(legacy ? p.star : [topLat, midLon], emoji(p.shape), `도착 · ${shapeName(p)}`, '#f5a623', 'big').addTo(planLayer);
+  const e = emoji(p.shape), n = esc(shapeName(p));
+  $('info').innerHTML = legacy
+    ? `<div class="ttl">${e} ${n} 원정 <span class="sub">왕복 ${p.totalKm} km</span></div>`
+    : `<div class="ttl">${e} ${n} 원정 <span class="sub">출발점에서 ${p.dir}쪽 ${p.distKm} km</span></div>
+       <div class="where">📍 <span id="place">${p.place ? esc(p.place) : '도착지 이름 찾는 중…'}</span></div>
+       <ol class="steps">
+         <li><i class="sw go"></i>🚩 출발 → ✏️ 그리기 시작점 <b>${p.goKm} km</b></li>
+         <li><i class="sw loop"></i>✏️ ${n} 한 바퀴 (${p.turn} 방향) <b>${p.loopKm} km</b></li>
+         <li><i class="sw back"></i>✏️ → 🚩 돌아오기 <b>${p.backKm} km</b></li>
+       </ol>
+       <div class="meta">모두 ${p.totalKm} km · 모양 지름 ${p.sizeM} m · 어긋남 ${p.devM} m</div>`;
   $('bWalk').disabled = $('bDone').disabled = $('bGpx').disabled = false;
+  fit(L.polyline(p.fullLL).getBounds()); // 안내판을 채운 뒤 높이를 재서 맞춘다
+  if (!legacy && !p.place) placeName(p.center).then(nm => {
+    if (plan !== p) return;
+    p.place = nm || '이름 없는 골목'; store.set('plan', p);
+    const el = $('place'); if (el) el.textContent = p.place;
+  });
 }
 
 $('bPlan').onclick = async () => {
   if (!start) return status('먼저 출발점을 정하세요 — 지도를 누르거나 「내 위치」');
   if (plan && !confirm('지금 원정을 버리고 새로 뽑을까요?')) return;
-  const radius = +store.get('radius', 2000), size = +store.get('size', 400);
+  const radius = +store.get('radius', 2000), size = +store.get('size', 400), pick = store.get('pick', 'all');
   $('bPlan').disabled = true;
   status('도로망을 불러오는 중…');
   try {
-    const { proj, G } = await loadGraph(start[0], start[1], radius + size);
+    const { proj, G } = await loadGraph(start[0], start[1], radius + Math.max(size, C.FIGURE_MIN_SIZE));
     status(`길 ${G.ids.length.toLocaleString()}개 교차점에서 원정을 짜는 중…`);
     await new Promise(r => setTimeout(r, 30)); // 안내 문구가 먼저 그려지게
     const seed = Math.floor(Math.random() * 1e6);
-    plan = C.plan(G, proj, [0, 0], radius, size, seed);
+    plan = C.plan(G, proj, [0, 0], radius, size, seed, { pick, custom: store.get('custom', null) });
     store.set('plan', plan);
     drawPlan(plan);
-    status('원정이 나왔어요. 빨간 길을 따라 걷고, 노란 점에서 모양을 그리세요.');
+    status(`${emoji(plan.shape)} 파란 점선을 따라 ✏️까지 가서, 빨간 선으로 ${shapeName(plan)}${eulReul(shapeName(plan))} 그리고 돌아오세요.`);
   } catch (e) { status(e.message); } finally { $('bPlan').disabled = false; }
 };
 
@@ -118,11 +164,10 @@ $('bDone').onclick = () => {
   if (stars.stars.some(s => s.id === plan.id)) return status('이미 별이 된 원정이에요');
   const s = C.done(plan, walked, stars);
   store.set('walked', walked); store.set('stars', stars); store.set('plan', null);
-  plan = null; planLayer.clearLayers(); meLayer.clearLayers();
+  plan = null; drawPlan(null); meLayer.clearLayers();
   if (watchId != null) { navigator.geolocation.clearWatch(watchId); watchId = null; $('bWalk').textContent = '걷기 시작'; }
   $('bWalk').disabled = $('bDone').disabled = $('bGpx').disabled = true;
-  info('');
-  status(`새 별! ${s.grade}등성 · 새 길 ${s.newKm} km(${Math.round(s.newFrac * 100)}%) · 별 ${stars.stars.length}개째`);
+  status(`${emoji(s.shape)} 새 별! ${s.grade}등성 · 새 길 ${s.newKm} km(${Math.round(s.newFrac * 100)}%) · 별 ${stars.stars.length}개째`);
 };
 
 $('bGpx').onclick = () => {
@@ -140,9 +185,10 @@ function drawSky() {
   const st = store.get('stars', { stars: [], names: {} }), S = st.stars;
   if (!S.length) { status('아직 별이 없어요 — 원정을 다녀오면 별이 생겨요'); return false; }
   S.forEach(s => {
-    L.polyline(s.loopLL, { color: '#8fa8d8', weight: 1, opacity: .4 }).addTo(skyLayer);
-    L.circleMarker(s.ll, { radius: [0, 11, 8, 6, 4, 3][s.grade] || 3, color: '#fff8d6', fillColor: '#fff3b0', fillOpacity: 1, weight: 1 })
-      .addTo(skyLayer).bindTooltip(esc(`${s.grade}등성 · ${C.SHAPE_KO[s.shape] || ''} · ${s.date} · 새 길 ${s.newKm} km`));
+    L.polyline(s.loopLL, { color: '#8fa8d8', weight: 1, opacity: .45 }).addTo(skyLayer);
+    L.circleMarker(s.ll, { radius: [0, 11, 8, 6, 4, 3][s.grade] || 3, color: '#fff8d6', fillColor: '#fff3b0', fillOpacity: 1, weight: 1, className: 'glow' })
+      .addTo(skyLayer).bindTooltip(esc(`${s.grade}등성 · ${shapeName(s)} · ${s.date} · 새 길 ${s.newKm} km`));
+    L.marker(s.ll, { icon: L.divIcon({ className: 'skyewrap', iconSize: null, html: `<div class="skye">${emoji(s.shape)}</div>` }), interactive: false }).addTo(skyLayer);
   });
   let nc = 0;
   for (let i = 0; i + 5 <= S.length; i += 5) {
@@ -150,11 +196,11 @@ function drawSky() {
     const lines = C.mstLines(S.slice(i, i + 5).map(s => s.ll));
     lines.forEach(l => L.polyline(l, { color: '#c9d6ff', weight: 1.5, opacity: .75 }).addTo(skyLayer));
     const p = lines.flat(), c = [p.reduce((a, b) => a + b[0], 0) / p.length, p.reduce((a, b) => a + b[1], 0) / p.length];
-    const name = st.names[nc] || `이름 없는 별자리 ${nc}`;
+    const k = nc, name = st.names[k] || `이름 없는 별자리 ${k}`;
     L.marker(c, { icon: L.divIcon({ className: 'lbl', html: esc(name), iconSize: null }) }).addTo(skyLayer)
-      .on('click', () => { const t = prompt('별자리 이름', name); if (t) { st.names[nc] = t; store.set('stars', st); drawSky(); } });
+      .on('click', () => { const t = prompt('별자리 이름', name); if (t) { st.names[k] = t; store.set('stars', st); drawSky(); } });
   }
-  map.fitBounds(L.latLngBounds(S.map(s => s.ll)).pad(0.4));
+  fit(L.latLngBounds(S.map(s => s.ll)).pad(0.3));
   status(`별 ${S.length}개 · 별자리 ${nc}개 — 별자리 이름을 누르면 바꿀 수 있어요`);
   return true;
 }
@@ -164,25 +210,63 @@ $('bSky').onclick = () => {
     map.removeLayer(planLayer); map.removeLayer(meLayer); if (startMarker) map.removeLayer(startMarker); // 밤하늘엔 출발점·오가는 길을 그리지 않는다
     setBase(store.get('base', 'osm'), true); skyLayer.addTo(map); drawSky(); $('bSky').textContent = '원정으로';
     $('bPlan').disabled = $('bLoc').disabled = true; // 밤하늘에선 원정을 짜지 않는다(안 보이는 층에 그려진다)
+    $('info').style.display = 'none';
   } else {
     mode = 'plan'; delete document.documentElement.dataset.theme;
     map.removeLayer(skyLayer); planLayer.addTo(map); meLayer.addTo(map); if (startMarker) startMarker.addTo(map);
-    setBase(store.get('base', 'osm'), false); $('bSky').textContent = '밤하늘'; $('bPlan').disabled = $('bLoc').disabled = false; status(plan ? '진행 중인 원정이 있어요' : '지도를 눌러 출발점을 정하세요');
+    setBase(store.get('base', 'osm'), false); $('bSky').textContent = '밤하늘'; $('bPlan').disabled = $('bLoc').disabled = false;
+    $('info').style.display = '';
+    status(plan ? '진행 중인 원정이 있어요' : '지도를 눌러 출발점을 정하세요');
   }
 };
 
 // ---------- 설정 ----------
+function drawPreview(pts) {
+  const cv = $('cPrev'), g = cv.getContext('2d');
+  g.clearRect(0, 0, cv.width, cv.height);
+  if (!pts) { cv.hidden = true; return; }
+  cv.hidden = false;
+  const s = cv.width / 2 - 10;
+  g.lineWidth = 3; g.strokeStyle = '#ff6b6b'; g.lineJoin = 'round'; g.beginPath();
+  pts.forEach(([x, y], i) => g[i ? 'lineTo' : 'moveTo'](cv.width / 2 + x * s, cv.height / 2 - y * s));
+  g.stroke();
+}
 $('bSet').onclick = () => {
   $('sRadius').value = store.get('radius', 2000); $('sSize').value = store.get('size', 400);
   $('sBase').value = store.get('base', 'osm'); $('sKey').value = store.get('vwkey', '');
+  $('sPick').value = store.get('pick', 'all');
+  const cu = store.get('custom', null);
+  $('customName').textContent = cu ? `지금 그림: ${cu.name} (점 ${cu.pts.length}개)` : '아직 올린 그림이 없어요';
+  drawPreview(cu && cu.pts);
   $('dSet').showModal();
 };
 $('dSet').addEventListener('close', () => {
   store.set('radius', +$('sRadius').value); store.set('size', +$('sSize').value);
-  store.set('vwkey', $('sKey').value.trim()); store.set('base', $('sBase').value);
+  store.set('vwkey', $('sKey').value.trim()); store.set('base', $('sBase').value); store.set('pick', $('sPick').value);
   if ($('sBase').value.startsWith('vw-') && !$('sKey').value.trim()) status('V-World 키가 없어 OpenStreetMap으로 보여요');
+  if ($('sPick').value === 'custom' && !store.get('custom', null)) status('「내 그림」을 고르셨어요 — 설정에서 그림을 먼저 올려 주세요');
   setBase(store.get('base', 'osm'), mode === 'sky');
 });
+
+// 내 그림: 윤곽 좌표만 남기고 이미지는 버린다
+$('bUpload').onclick = () => $('fImg').click();
+$('fImg').onchange = async e => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  try {
+    const bmp = await createImageBitmap(f);
+    const k = 64 / Math.max(bmp.width, bmp.height), w = Math.max(8, Math.round(bmp.width * k)), h = Math.max(8, Math.round(bmp.height * k));
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+    const g = cv.getContext('2d'); g.drawImage(bmp, 0, 0, w, h); bmp.close && bmp.close();
+    const pts = outlineFromRGBA(g.getImageData(0, 0, w, h).data, w, h);
+    const name = f.name.replace(/\.[^.]+$/, '').slice(0, 20) || '내 그림';
+    store.set('custom', { name, pts });
+    $('sPick').value = 'custom'; store.set('pick', 'custom'); // 창을 닫기 전에 원정을 뽑아도 내 그림으로
+    $('customName').textContent = `지금 그림: ${name} (점 ${pts.length}개) — 빨간 선이 걸을 모양이에요`;
+    drawPreview(pts);
+  } catch (err) { $('customName').textContent = err.message || '그림을 읽지 못했어요'; drawPreview(null); }
+};
+
 $('bExport').onclick = () => {
   const data = { walked: store.get('walked', {}), stars: store.get('stars', { stars: [], names: {} }) };
   const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(new Blob([JSON.stringify(data)], { type: 'application/json' })), download: '동네별자리_기록.json' });
@@ -202,4 +286,4 @@ $('fImport').onchange = async e => {
 };
 
 if (plan) drawPlan(plan);
-window.__app = { setStart, C }; // 점검용
+window.__app = { setStart, C, outlineFromRGBA, map }; // 점검용
