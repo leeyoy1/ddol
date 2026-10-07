@@ -468,14 +468,16 @@ function setFold(on, save = true) {
   $('fold').setAttribute('aria-label', on ? '메뉴 펼치기' : '메뉴 접기');
   if (save) store.set('fold', on);
 }
-let foldY = null;
-$('fold').addEventListener('pointerdown', e => { foldY = e.clientY; });
+// 누르기는 click에서 바꾼다 — pointerup에서 펼치면 시트가 먼저 커지고, 폰이 그 뒤에 만드는 click이
+// 손가락 아래로 올라온 「걷기 시작」에 떨어졌다(10-08 사용자 보고). 밀기만 pointerup에서, 뒤따르는 click은 버린다
+let foldY = null, swiped = false;
+$('fold').addEventListener('pointerdown', e => { foldY = e.clientY; swiped = false; });
 $('fold').addEventListener('pointerup', e => {
   if (foldY == null) return;
   const dy = e.clientY - foldY; foldY = null;
-  if (dy > 30) setFold(true); else if (dy < -30) setFold(false); else setFold(!$('sheet').classList.contains('folded'));
+  if (Math.abs(dy) > 30) { swiped = true; setFold(dy > 0); }
 });
-$('fold').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setFold(!$('sheet').classList.contains('folded')); } });
+$('fold').addEventListener('click', () => { if (swiped) { swiped = false; return; } setFold(!$('sheet').classList.contains('folded')); }); // 키보드 Enter·Space도 click으로 온다
 setFold(store.get('fold', false), false);
 
 // ---------- 28수 성도: 서울시청을 가운데 두고 방위 28칸 ----------
