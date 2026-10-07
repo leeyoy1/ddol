@@ -83,14 +83,14 @@ svg.i{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-widt
 .seg{margin-bottom:var(--space-sm)}
 .seg button{min-height:36px;font-size:13px;font-weight:400;color:var(--ink-2)}
 .seg button[aria-pressed="true"]{border-color:var(--navy);color:var(--navy);font-weight:700;background:var(--paper-2)}
-#sheet.active .seg,#sheet.folded .seg{display:none}
+#sheet.folded .seg{display:none}
 /* 밤하늘에서는 산책 단추를 숨기고 꼬리표만 */
 :root[data-theme="dark"] #sheet .seg,:root[data-theme="dark"] #sheet .r1,:root[data-theme="dark"] #sheet .r2{display:none}
 button.walking{border-color:var(--accent);color:var(--accent)}
 #fold:hover{background:transparent}
 #sheet.folded #info,#sheet.folded .r2,#sheet.folded .tabs{display:none}
 /* 산책 중에 접으면 걷기·다녀왔어요 줄을 남긴다 */
-#sheet.folded.active .r2{display:flex}
+:root:not([data-theme="dark"]) #sheet.folded.active .r2{display:flex}
 #sheet.folded.active .r1{display:none}
 .row{display:flex;gap:var(--space-sm);max-width:520px;margin:0 auto}
 .row+.row{margin-top:var(--space-sm)}
@@ -243,7 +243,7 @@ details.adv summary{cursor:pointer;font-size:14px;color:var(--ink-2)}
     <label for="sPick">무엇을 그릴까요</label>
     <select id="sPick"><option value="all">아무거나</option><option value="geo">도형(별·하트·세모…)</option><option value="animal">동물(물고기·고양이·토끼·고래)</option><option value="plant">식물(잎·나무·튤립·꽃·선인장)</option><option value="custom">내 도안(도감에서 고른 것)</option></select>
     <label for="sRadius">얼마나 멀리</label>
-    <select id="sRadius"><option value="1000">가볍게 · 반경 1 km (왕복 3~4 km쯤)</option><option value="1500">조금 더 · 1.5 km</option><option value="2000">멀리 · 2 km (왕복 5~6 km쯤)</option><option value="3000">아주 멀리 · 3 km</option></select>
+    <select id="sRadius"><option value="500">가까이 · 반경 500 m</option><option value="1000">가볍게 · 반경 1 km (왕복 3~4 km쯤)</option><option value="1500">조금 더 · 1.5 km</option><option value="2000">멀리 · 2 km (왕복 5~6 km쯤)</option><option value="3000">아주 멀리 · 3 km</option></select>
     <label for="sSize">모양 크기</label>
     <select id="sSize"><option value="300">작게 · 300 m</option><option value="400">보통 · 400 m</option><option value="600">크게 · 600 m</option><option value="800">아주 크게 · 800 m</option></select>
     <p>동물·식물·내 도안은 알아볼 수 있게 600 m 이상으로 그려요. 크게 그릴수록 길 위 모양이 더 닮아요.</p>

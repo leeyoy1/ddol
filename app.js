@@ -193,18 +193,19 @@ function drawPlan(p) {
 }
 
 $('bPlan').onclick = async () => {
-  if (!start) { // 지도를 안 눌렀으면 지금 자리에서(위치를 못 받으면 지도 가운데에서) — 첫 화면에서 「무엇부터 누르나」가 갈리지 않게(10-08 가상 테스트 5/5)
-    status('지금 자리를 찾는 중…');
-    const here = await new Promise(ok => navigator.geolocation ? navigator.geolocation.getCurrentPosition(p => ok([p.coords.latitude, p.coords.longitude]), () => ok(null), { enableHighAccuracy: true, timeout: 8000 }) : ok(null));
-    const c = map.getCenter();
-    setStart(...(here || [c.lat, c.lng]), here ? '지금 자리에서' : '위치를 받지 못해 지도 가운데에서');
-  }
-  if (plan && !confirm('지금 산책을 버리고 새로 뽑을까요?')) return;
-  const radius = +store.get('radius', 1000), size = +store.get('size', 400);
-  const pick = radius <= 500 && store.get('pick', 'all') === 'all' ? 'geo' : store.get('pick', 'all'); // 짧게: 동물·식물은 600 m 넘게 그려야 해서 도형으로
-  $('bPlan').disabled = true;
-  status('동네 길을 불러오는 중…');
+  if (plan && !confirm('지금 산책을 버리고 새로 뽑을까요?')) return; // 출발점을 옮기기 전에 묻는다
+  $('bPlan').disabled = true; // 위치를 기다리는 동안에도 두 번 눌리지 않게
   try {
+    if (!start) { // 지도를 안 눌렀으면 지금 자리에서(위치를 못 받으면 지도 가운데에서) — 첫 화면에서 「무엇부터 누르나」가 갈리지 않게(10-08 가상 테스트 5/5)
+      status('지금 자리를 찾는 중…');
+      const here = await new Promise(ok => navigator.geolocation ? navigator.geolocation.getCurrentPosition(p => ok([p.coords.latitude, p.coords.longitude]), () => ok(null), { enableHighAccuracy: true, timeout: 8000 }) : ok(null));
+      if (mode !== 'plan') return; // 기다리는 사이 밤하늘로 갔으면 멈춘다 — 밤하늘에 출발 핀을 그리지 않는다
+      const c = map.getCenter();
+      setStart(...(here || [c.lat, c.lng]), here ? '지금 자리에서' : '위치를 받지 못해 지도 가운데에서');
+    }
+    const radius = +store.get('radius', 1000), size = +store.get('size', 400);
+    const pick = radius <= 500 && store.get('pick', 'all') === 'all' ? 'geo' : store.get('pick', 'all'); // 짧게: 동물·식물은 600 m 넘게 그려야 해서 도형으로
+    status('동네 길을 불러오는 중…');
     const d = activeDesign(), mats = await loadMat();
     status('어디로 갈지 고르는 중…');
     plan = await planAsync({ lat: start[0], lon: start[1], radius, size, pick, seed: Math.floor(Math.random() * 1e6),
@@ -214,7 +215,7 @@ $('bPlan').onclick = async () => {
     store.set('plan', plan); store.set('track', null);
     drawPlan(plan);
     status(`${plan.gold ? '반짝 산책이에요. ' : ''}파란 점선을 따라 ✏️까지 가서, 파란 실선을 따라 ${shapeName(plan)}${eulReul(shapeName(plan))} 그리고 돌아오세요. 출발할 때 「걷기 시작」을 눌러 주세요.`);
-  } catch (e) { status(e.message); } finally { $('bPlan').disabled = false; }
+  } catch (e) { status(e.message); } finally { $('bPlan').disabled = mode !== 'plan'; }
 };
 
 // 걷기: 내 위치를 따라가며 기록한다(이 폰에만). 산책마다 기록을 저장해 새로 고침해도 이어진다
@@ -361,6 +362,7 @@ $('dSet').addEventListener('close', () => {
   if ($('sBase').value.startsWith('vw-') && !$('sKey').value.trim()) status('V-World 키가 없어 OpenStreetMap으로 보여요');
   if ($('sPick').value === 'custom' && !activeDesign()) status('「내 도안」을 고르셨어요. 도감에서 도안을 먼저 만들어 주세요.');
   setBase(store.get('base', 'osm'), mode === 'sky');
+  setLen(Object.keys(LEN).find(k => LEN[k].radius === +store.get('radius', 1000)), false); // 고급에서 고친 거리를 단추에도(맞는 단추가 없으면 모두 꺼짐)
 });
 
 $('bExport').onclick = () => {
