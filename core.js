@@ -1,4 +1,4 @@
-// 글자 산책 · 별자리 원정 — 계산부 (walk_shape.py · expedition.py의 JS 판)
+// 글자 산책 · 별자리 산책 — 계산부 (walk_shape.py · expedition.py의 JS 판)
 // 브라우저와 Node(시험) 양쪽에서 쓴다. DOM을 건드리지 않는다.
 
 export class Proj {
@@ -252,10 +252,10 @@ export function search(G, unit, size, maxKm, { step, rots = 24, angles = null, s
   return best;
 }
 
-// ---------- 원정 ----------
+// ---------- 산책 ----------
 export const GOOD = new Set(['footway', 'pedestrian', 'path', 'living_street', 'residential', 'track', 'unclassified', 'cycleway']);
 
-export function rng(seed) { // mulberry32 — 같은 시드면 같은 원정
+export function rng(seed) { // mulberry32 — 같은 시드면 같은 산책
   let a = seed >>> 0;
   return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
 }
@@ -277,7 +277,7 @@ export function grade(devRatio, newFrac) {
   return Math.min(5, g + (newFrac < 0.3 ? 1 : 0));
 }
 
-// 현지 날짜 yymmdd — toISOString은 UTC라 한국 새벽 0~9시 원정이 하루 전 날짜로 찍혔다(10-08 검토)
+// 현지 날짜 yymmdd — toISOString은 UTC라 한국 새벽 0~9시 산책이 하루 전 날짜로 찍혔다(10-08 검토)
 const localYmd = (d = new Date()) => String(d.getFullYear()).slice(2) + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0');
 const COMPASS = ['동', '북동', '북', '북서', '서', '남서', '남', '남동'];
 const pathLen = (G, p) => { let s = 0; for (let i = 0; i + 1 < p.length; i++) { const a = G.nodes.get(p[i]), b = G.nodes.get(p[i + 1]); s += Math.hypot(a.x - b.x, a.y - b.y); } return s; };
@@ -304,11 +304,13 @@ export function plan(G, proj, start, radius, size, seed, { pick = 'all', custom 
     sz = fig ? Math.max(size, FIGURE_MIN_SIZE) : size;
     // 통로 경로 + 성긴 경유점 + 순서 닮음 + 자리 9곳(10-08 bench_shape: 프레셰 18.4→12.7%, 길이비 1.90→1.50, 계산 0.04→0.35 s)
     const SHAPE_MODE = { corridor: 6, sparse: 2, order: true, shifts: [-sz / 8, 0, sz / 8] };
-    best = search(G, shape === 'custom' ? custom.pts : S[shape], sz, 6,
+    // 모양 길 상한: 목표 둘레(≈π·지름)의 2.2배 — 넘으면 다른 도착지(짧게 고른 사람에게 5 km가 나오던 일, 10-08 가상 테스트)
+    const maxLoopKm = Math.max(1.5, sz * Math.PI / 1000 * 2.2);
+    best = search(G, shape === 'custom' ? custom.pts : S[shape], sz, maxLoopKm,
       fig ? { angles: FIGURE_ANGLES, scales: [0.9, 1.1], center: [n.x, n.y], ...SHAPE_MODE } : { rots: 12, scales: [0.9, 1.1], center: [n.x, n.y], ...SHAPE_MODE });
   }
   if (!best) throw new Error('이 근처엔 모양을 그릴 자리가 없었어요. 다른 출발점을 골라 보세요.');
-  const gold = R() < 1 / 12; // 반짝 원정(희귀) — 시드가 같으면 같다
+  const gold = R() < 1 / 12; // 반짝 산책(희귀) — 시드가 같으면 같다
   const go = shortest(G, s0, best.path[0]), back = shortest(G, best.path[best.path.length - 1], s0);
   const full = [...go, ...best.path.slice(1), ...back.slice(1)];
   const edgeLen = {};
@@ -344,7 +346,7 @@ export function plan(G, proj, start, radius, size, seed, { pick = 'all', custom 
 // 닮음 별점(1~5): 순서 닮음(프레셰 ÷ 지름) — 10-08 측정 30건의 분포(중앙 12.7%)에 맞춘 구간
 export const likeness = r => r < 0.08 ? 5 : r < 0.11 ? 4 : r < 0.15 ? 3 : r < 0.2 ? 2 : 1;
 
-// 걸은 기록이 그린 길(고리)을 얼마나 지났나: 고리를 20 m 간격으로 나눠 40 m 안에 걸은 점이 있는 비율
+// 걸은 기록이 모양 길(고리)을 얼마나 지났나: 고리를 20 m 간격으로 나눠 40 m 안에 걸은 점이 있는 비율
 export function coverage(loopLL, trackLL, step = 20, near = 40) {
   if (!loopLL.length || !trackLL.length) return 0;
   const k = Math.cos(loopLL[0][0] * Math.PI / 180) * 111320, xy = ([a, b]) => [b * k, a * 110540];
