@@ -61,7 +61,7 @@ const pin = (ll, e, text, color, cls = '') => L.marker(ll, {
 });
 
 const planLayer = L.layerGroup().addTo(map), skyLayer = L.layerGroup(), meLayer = L.layerGroup().addTo(map);
-let start = null, startMarker = null, end = null, endMarker = null, plan = store.get('plan', null), watchId = null, warned = false;
+let start = null, startMarker = null, end = null, endMarker = null, plan = store.get('plan', null), watchId = null, warned = false, follow = true, lastLL = null;
 if (plan && !plan.goLL) plan = null; // 10-07 첫 판 산책은 모양 길(loopLL)이 없어 걸어도 별이 될 수 없다 — 버린다
 
 function setStart(lat, lon, why) {
@@ -87,26 +87,31 @@ async function setEnd(lat, lon) {
   if (d < +store.get('radius', 1000) / 2) return status('출발점과 너무 가까워서 한 바퀴 돌아 출발점으로 돌아와요.');
   end = [lat, lon];
   const far = d > END_MAX_M;
-  endMarker = pin(end, '', far ? '너무 멀어요' : '여기서 끝', 'var(--path-back)', far ? 'below far' : 'below').addTo(map)
+  endMarker = pin(end, '', far ? '너무 멀어요' : '끝낼 곳', 'var(--path-back)', far ? 'below far' : 'below').addTo(map)
     .on('click', () => { clearEnd(); status('끝낼 곳을 지웠어요. 출발점으로 돌아오는 산책이에요.'); });
-  endMarker.getElement()?.setAttribute('aria-label', '여기서 끝 — 누르면 지우기');
-  status(far ? '거기까지는 걸어가기엔 멀어요. 조금 더 가까운 곳을 눌러 주세요.' : '찍은 곳에서 끝나는 산책이에요. 「산책 뽑기」를 누르세요. 끝 표시를 다시 누르면 지워져요.');
+  endMarker.getElement()?.setAttribute('aria-label', '끝낼 곳 — 누르면 지워요');
+  status(far ? '거기까지는 걸어가기엔 멀어요. 조금 더 가까운 곳을 눌러 주세요.' : '여기가 끝낼 곳이에요. 「산책 뽑기」를 누르세요. 끝낼 곳 표시를 다시 누르면 지워져요.');
 }
 map.on('click', e => {
   if (mode !== 'plan' || watchId != null) return;
   if (plan) return status('지금 산책이 있어요. 새로 뽑으려면 「산책 뽑기」를 다시 누르세요. 새로 뽑으면 지금까지 걸은 길은 지워져요.'); // 산책 중에 핀만 옮겨지면 헷갈린다
+  if (map.getZoom() < 15) { map.setView(e.latlng, 16); return status(`가까이 왔어요. ${start ? '끝낼 곳' : '출발할 곳'}을 다시 한 번 눌러 주세요.`); }
   if (!start) return setStart(e.latlng.lat, e.latlng.lng, '여기서');
   setEnd(e.latlng.lat, e.latlng.lng);
 });
 
 $('bLoc').onclick = () => {
-  if (!navigator.geolocation) { const c = map.getCenter(); return setStart(c.lat, c.lng, '지도 가운데에서'); }
+  if (watchId != null) { follow = true; if (lastLL) map.setView(lastLL, Math.max(map.getZoom(), 17)); return status('내 위치를 따라가요. 지도를 끌면 멈춰요.'); }
+  if (!navigator.geolocation) return status('이 브라우저는 위치를 알려 주지 않아요. 지도를 눌러 출발할 곳을 찍어 주세요.');
   status('위치를 찾는 중…');
   navigator.geolocation.getCurrentPosition(p => {
-    map.setView([p.coords.latitude, p.coords.longitude], 15);
-    setStart(p.coords.latitude, p.coords.longitude, '지금 자리에서');
-  }, () => { const c = map.getCenter(); setStart(c.lat, c.lng, '위치를 받지 못해 지도 가운데에서'); }, { enableHighAccuracy: true, timeout: 15000 });
+    const ll = [p.coords.latitude, p.coords.longitude];
+    map.setView(ll, 16);
+    if (plan) return status('지금 자리예요.');
+    setStart(...ll, '지금 자리에서');
+  }, () => status('위치를 받지 못했어요. 지도를 눌러 출발할 곳을 찍어 주세요.'), { enableHighAccuracy: true, timeout: 15000 });
 };
+map.on('dragstart', () => { if (watchId != null) follow = false; }); // 손으로 지도를 끌면 따라가기를 멈춘다
 
 // ---------- 산책 계산: 작업자에서(화면이 굳지 않게). 작업자를 못 쓰는 브라우저는 화면 쪽에서 같은 코드로 ----------
 let worker = null;
@@ -171,13 +176,14 @@ function matListHtml(p) {
 function drawPlan(p) {
   planLayer.clearLayers();
   $('sheet').classList.toggle('active', !!p);
-  if (!p) { $('info').innerHTML = ''; return; }
+  if (!p) { $('info').innerHTML = ''; $('bDone').classList.remove('primary'); return; }
   L.polyline(p.tgtLL, { color: T('--path-back'), dashArray: '4 6', weight: 2 }).addTo(planLayer);
   L.polyline(p.goLL, { color: T('--path-go'), weight: 5, opacity: .85, dashArray: '1 9', lineCap: 'round' }).addTo(planLayer);
-  L.polyline(p.backLL, { color: T('--path-back'), weight: 4, opacity: .7, dashArray: '1 9', lineCap: 'round' }).addTo(planLayer);
+  L.polyline(p.backLL, { color: '#fff', weight: 8, opacity: .8 }).addTo(planLayer);
+  L.polyline(p.backLL, { color: T('--path-back'), weight: 5, opacity: .9, dashArray: '2 8', lineCap: 'round' }).addTo(planLayer);
   L.polyline(p.loopLL, { color: T('--accent'), weight: 6, opacity: .9 }).addTo(planLayer);
-  pin(p.loopStart, '✏️', '여기서 그리기 시작', 'var(--accent)', 'below').addTo(planLayer);
-  if (p.oneWay) pin(p.backLL[p.backLL.length - 1], '', '여기서 끝', 'var(--path-back)', 'below').addTo(planLayer);
+  pin(p.loopStart, '✏️', '그리기 시작점', 'var(--accent)', 'below').addTo(planLayer);
+  if (p.oneWay) pin(p.backLL[p.backLL.length - 1], '', '끝낼 곳', 'var(--path-back)', 'below').addTo(planLayer);
   // 도착 핀은 모양 위쪽 가장자리에 — 가운데에 두면 그릴 모양을 덮는다
   const topLat = Math.max(...p.tgtLL.map(q => q[0])), midLon = p.tgtLL.reduce((s, q) => s + q[1], 0) / p.tgtLL.length;
   pin([topLat, midLon], emoji(p.shape), `${p.gold ? '반짝 ' : ''}${shapeName(p)} 그리는 곳`, p.gold ? 'var(--gold)' : 'var(--navy)', p.gold ? 'big gold' : 'big').addTo(planLayer);
@@ -187,12 +193,13 @@ function drawPlan(p) {
   const e = emoji(p.shape), n = esc(shapeName(p));
   $('info').innerHTML = `<div class="ttl">${p.gold ? '반짝 ' : ''}${e} ${n} 산책 <span class="sub">출발점에서 ${p.dir}쪽 ${p.distKm} km</span></div>
        <ol class="steps">
-         <li><i class="sw go"></i><span>✏️까지 가기</span><b>${p.goKm} km</b></li>
+         <li><i class="sw go"></i><span>그리기 시작점(✏️)까지 가기</span><b>${p.goKm} km</b></li>
          <li><i class="sw loop"></i><span>${n} 그리며 한 바퀴(${p.turn} 방향)</span><b>${p.loopKm} km</b></li>
-         <li><i class="sw back"></i><span>${p.oneWay ? `<span id="endPlace">${esc(p.endPlace || '찍은 곳')}</span>까지 가기` : '출발점으로 돌아오기'}</span><b>${p.backKm} km</b></li>
+         <li><i class="sw back"></i><span>${p.oneWay ? `<span id="endPlace">${esc(p.endPlace || '끝낼 곳')}</span>까지 가기` : '출발점으로 돌아오기'}</span><b>${p.backKm} km</b></li>
        </ol>
-       <div class="meta">모두 ${p.totalKm} km(모양 길 ${p.loopKm} + 오가는 길 ${(p.goKm + p.backKm).toFixed(2)}) · 모양 길의 60%를 지나면 별</div>${p.backBy ? `
-       <div class="meta"><label>돌아갈 시각 <input type="time" id="backBy" value="${esc(p.backBy)}"></label> · 화면을 켜 두면 위 띠로 알려요</div>` : ''}
+       <div class="meta">모두 ${p.totalKm} km(모양 길 ${p.loopKm} + 오가는 길 ${(p.goKm + p.backKm).toFixed(2)})</div>
+       <div class="rule">모양 길(파란 실선)의 60%를 지나면 별이 떠요</div>${p.backBy ? `
+       <div class="meta"><label>돌아갈 시각 <input type="time" id="backBy" value="${esc(p.backBy)}"></label> · 화면을 켜 두면 알려요</div>` : ''}
        <details class="more"><summary>자세히</summary>
          <div class="meta">모양 그리는 곳: <span id="place">${p.place ? esc(p.place) : '근처 이름을 찾는 중…'}</span></div>
          ${p.likeness ? `<div class="meta">길이 모양을 닮은 정도 ${stars5(p.likeness)} — 골목이 모양을 얼마나 따라가는지예요. 별의 밝기(등성)는 걸은 비율로 따로 정해져요</div>` : ''}
@@ -200,7 +207,10 @@ function drawPlan(p) {
          ${matListHtml(p)}
          <details class="promise"${p.promise ? ' open' : ''}><summary>나와 약속하기 — 이 시각에 걷기</summary><label>언제 걸을까요 <input type="datetime-local" id="promise" value="${esc(p.promise || '')}"></label>
            <small>나 혼자 하는 약속이에요(아무에게도 보내지 않아요). 그 시각 15분 안에 「걷기 시작」을 누르면 한 등급 밝은 별이 떠요. 못 지켜도 별은 그대로예요.</small></details>
+         <button type="button" class="link" id="bQuit">이 산책 그만두기</button>
        </details>`;
+  $('bQuit').onclick = quitPlan;
+  document.querySelector('#info .more').addEventListener('toggle', () => fit(L.polyline(p.fullLL).getBounds())); // 펼치고 접을 때 남은 지도에 길 전체가 들어오게(D5)
   $('bWalk').disabled = $('bGpx').disabled = false;
   $('bDone').disabled = !(store.get('track', null)?.id === p.id);
   // 가게를 누르면 목록을 접고(지도를 가리지 않게) 그 가게로 간다
@@ -211,7 +221,7 @@ function drawPlan(p) {
     map.flyTo(m.ll, 17, { duration: 0.6 });
   };
   $('promise').onchange = e => { const v = e.target.value; p.promise = /^\d{4}-\d\d-\d\dT\d\d:\d\d$/.test(v) ? v : null; store.set('plan', p); if (p.promise) status(`약속했어요 · ${promiseText(p.promise)}에 걷기 시작하면 한 등급 밝은 별이 떠요.`); };
-  if ($('backBy')) $('backBy').onchange = e => { if (/^\d\d:\d\d$/.test(e.target.value)) { p.backBy = e.target.value; warned = false; store.set('plan', p); } };
+  if ($('backBy')) $('backBy').onchange = e => { if (/^\d\d:\d\d$/.test(e.target.value)) { p.backBy = e.target.value; warned = false; backAlert(false); store.set('plan', p); } };
   fit(L.polyline(p.fullLL).getBounds()); // 안내판을 채운 뒤 높이를 재서 맞춘다
   if (p.oneWay && !p.endPlace) placeName(p.backLL[p.backLL.length - 1].map(v => +v.toFixed(3)), 14).then(({ label, dong }) => {
     if (plan !== p || !(dong || label)) return;
@@ -235,8 +245,8 @@ $('bPlan').onclick = async () => {
       status('지금 자리를 찾는 중…');
       const here = await new Promise(ok => navigator.geolocation ? navigator.geolocation.getCurrentPosition(p => ok([p.coords.latitude, p.coords.longitude]), () => ok(null), { enableHighAccuracy: true, timeout: 8000 }) : ok(null));
       if (mode !== 'plan') return; // 기다리는 사이 밤하늘로 갔으면 멈춘다 — 밤하늘에 출발 핀을 그리지 않는다
-      const c = map.getCenter();
-      setStart(...(here || [c.lat, c.lng]), here ? '지금 자리에서' : '위치를 받지 못해 지도 가운데에서');
+      if (!here) return status('위치를 받지 못했어요. 지도를 눌러 출발할 곳을 찍고 다시 「산책 뽑기」를 누르세요.'); // 말없이 시청 둘레를 뽑던 일(디자이너 검토)
+      setStart(...here, '지금 자리에서');
     }
     const radius = +store.get('radius', 1000), size = +store.get('size', 400);
     const pick = radius <= 500 && store.get('pick', 'all') === 'all' ? 'geo' : store.get('pick', 'all'); // 짧게: 동물·식물은 600 m 넘게 그려야 해서 도형으로
@@ -256,7 +266,7 @@ $('bPlan').onclick = async () => {
     warned = false; clearEnd(); // 끝 핀은 이제 산책 그림(planLayer)에 그린다
     store.set('plan', plan); store.set('track', null);
     drawPlan(plan);
-    status(`${plan.gold ? '반짝 산책이에요. ' : ''}파란 점선을 따라 ✏️까지 가서, 파란 실선을 따라 ${shapeName(plan)}${eulReul(shapeName(plan))} 그리고 ${plan.oneWay ? '회색 점선을 따라 끝낼 곳까지 가세요' : '돌아오세요'}. 출발할 때 「걷기 시작」을 눌러 주세요.`);
+    status(`${plan.gold ? '반짝 산책이에요. ' : ''}파란 점선을 따라 그리기 시작점(✏️)까지 가서, 파란 실선을 따라 ${shapeName(plan)}${eulReul(shapeName(plan))} 그리고 ${plan.oneWay ? '회색 점선을 따라 끝낼 곳까지 가세요' : '돌아오세요'}. 출발할 때 「걷기 시작」을 눌러 주세요.`);
   } catch (e) { status(e.message); } finally { $('bPlan').disabled = mode !== 'plan'; }
 };
 
@@ -277,6 +287,7 @@ function stopWalk() {
   if (watchId != null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
   keepAwake(false);
   $('bWalk').lastChild.textContent = '걷기 시작'; $('bWalk').classList.remove('walking'); $('bSkip').hidden = true;
+  $('status').setAttribute('aria-live', 'polite'); backAlert(false);
 }
 $('bWalk').onclick = () => {
   if (watchId != null) { stopWalk(); return status('잠시 멈췄어요. 다시 누르면 이어서 기록해요.'); }
@@ -286,20 +297,34 @@ $('bWalk').onclick = () => {
   const line = L.polyline(prev && prev.id === plan.id ? prev.pts : [], { color: T('--path-go'), weight: 4 }).addTo(meLayer);
   const me = L.marker([0, 0], { icon: L.divIcon({ className: '', html: '<div class="me"></div>', iconSize: [16, 16] }) });
   keepAwake(true);
-  let first = true; // 첫 위치에서 내 자리로 다가간다 — 뽑을 때 맞춘 축척은 큰 안내판 때문에 멀리서 본 지도라 걷는 길이 안 보였다(10-08)
+  // 처음엔 내 자리로 다가가고, 그 뒤로는 따라간다(지도를 끌면 멈춤 — 오른쪽 아래 「내 위치로」로 다시)
+  follow = true; let first = true, lastGood = Date.now(), acc = null; const marks = new Set();
+  $('status').setAttribute('aria-live', 'off'); // 위치마다 바뀌는 띠는 낭독하지 않고, 이정표만 따로 읽는다(접근성 검토)
   watchId = navigator.geolocation.watchPosition(p => {
-    if (p.coords.accuracy > 60) return; // 실내·지하에서 튀는 점은 버린다
-    const ll = [p.coords.latitude, p.coords.longitude], tr = addPoint(ll);
+    if (p.coords.accuracy > 60) { // 실내·지하에서 튀는 점은 버리되, 오래 못 받으면 말한다
+      if (Date.now() - lastGood > 20000) status(`위치가 흔들려요(±${Math.round(p.coords.accuracy)} m). 하늘이 트인 곳에서 잠깐 기다려 주세요.`);
+      return;
+    }
+    lastGood = Date.now();
+    const ll = [p.coords.latitude, p.coords.longitude], tr = addPoint(ll); lastLL = ll;
     line.addLatLng(ll); me.setLatLng(ll).addTo(meLayer);
-    if (first) { first = false; map.setView(ll, Math.max(map.getZoom(), 17)); }
+    (acc = acc || L.circle(ll, { radius: p.coords.accuracy, color: T('--accent'), weight: 1, opacity: .5, fillOpacity: .08, interactive: false }).addTo(meLayer)).setLatLng(ll).setRadius(p.coords.accuracy);
+    if (first) { first = false; map.setView(ll, Math.max(map.getZoom(), 17)); } else if (follow) map.panTo(ll, { animate: false });
     $('bDone').disabled = false;
     const cov = Math.round(C.coverage(plan.loopLL, tr.pts, 20, 40, tr.skip) * 100);
+    $('bDone').classList.toggle('primary', cov >= C.NEED * 100); // 별 조건을 채우면 「다녀왔어요」가 주 단추
+    for (const m of [25, 50, 75]) if (cov >= m && !marks.has(m)) { marks.add(m); say(`모양 길 ${m}%를 지났어요.`); }
     if (!plan.backBy) return status(`걷는 중 · ${trackKm(tr.pts).toFixed(2)} km · 모양 길의 ${cov}%를 지났어요`);
     // 돌아갈 시각: 남은 분 ≤ 지금 자리→끝 곳 직선거리×1.3을 걷는 분이면 알린다(서버가 없어 앱을 켜 둔 동안만)
     const left = minutesUntil(plan.backBy), need = map.distance(ll, plan.backLL[plan.backLL.length - 1]) * 1.3 / WALK_M_PER_MIN;
-    if (left > need) return status(`걷는 중 · 모양 길 ${cov}% · ${plan.backBy}까지 ${Math.round(left)}분`);
-    if (!warned) { warned = true; if (store.get('vib', 'on') === 'on' && navigator.vibrate) navigator.vibrate(200); }
-    status(left > 0 ? `지금 돌아가면 ${plan.backBy}에 맞춰요 · 모양 길 ${cov}%` : `${plan.backBy}이 지났어요 · 모양 길 ${cov}%`);
+    for (const m of [10, 5]) if (left <= m && left > 0 && !marks.has('t' + m)) { marks.add('t' + m); say(`돌아갈 시각까지 ${m}분 남았어요.`); }
+    if (left > need) return status(`걷는 중 · 모양 길 ${cov}% · ${hm(plan.backBy)}까지 ${Math.round(left)}분`);
+    if (!warned) {
+      warned = true; backAlert(true);
+      if (store.get('vib', 'on') === 'on' && navigator.vibrate) navigator.vibrate([300, 150, 300, 150, 600]);
+      say(`돌아갈 시각이에요. 지금 돌아가면 ${hm(plan.backBy)}에 맞춰요.`, true);
+    }
+    status(left > 0 ? `지금 돌아가면 ${hm(plan.backBy)}에 맞춰요 · 모양 길 ${cov}%` : `${hm(plan.backBy)}이 지났어요 · 모양 길 ${cov}%`);
   }, err => { if (err.code === 1) { stopWalk(); status('위치 권한이 꺼져 있어요. 브라우저 설정에서 켜 주세요.'); } else status('위치를 받지 못하고 있어요. 하늘이 트인 곳으로 가 보세요.'); }, { enableHighAccuracy: true });
   $('bWalk').lastChild.textContent = '잠깐 멈춤'; $('bWalk').classList.add('walking'); $('bSkip').hidden = false;
   setFold(true, false); // 걷는 동안엔 지도를 넓게
@@ -310,12 +335,14 @@ $('bDone').onclick = () => {
   if (!plan) return;
   const tr = store.get('track', null), mine = tr && tr.id === plan.id, pts = mine ? tr.pts : [], skip = mine ? tr.skip || [] : [];
   const cov = C.coverage(plan.loopLL, pts, 20, 40, skip), skipped = C.skippedFrac(plan.loopLL, skip);
-  if (cov < C.NEED) return status(`모양 길의 ${Math.round(cov * 100)}%를 지났어요${skipped ? '(못 걷는 길은 빼고)' : ''}. 60%를 넘기면 별이 돼요.`);
+  if (cov < C.NEED) return status(`모양 길의 ${Math.round(cov * 100)}%를 지났어요${skipped ? '(못 가는 길은 빼고)' : ''}. 60%를 넘기면 별이 돼요.`);
   // 약속: 약속한 시각 15분 안에 걷기 시작했나 · 정각: 돌아갈 시각과 1분 안
   const kept = !!(plan.promise && mine && tr.t0 && Math.abs(tr.t0 - new Date(plan.promise).getTime()) <= 15 * 60000);
   const late = plan.backBy ? Math.round(-minutesUntil(plan.backBy) * 60) : null, ontime = late != null && Math.abs(late) <= 60 ? late : null;
   const walked = store.get('walked', {}), stars = store.get('stars', { stars: [], names: {} });
   if (stars.stars.some(s => s.id === plan.id)) return status('이미 별이 된 산책이에요.');
+  // 되돌릴 수 없으니 걷는 중이거나 1등성 아래면 묻는다 — 「잠깐 멈춤」 옆이라 잘못 누르기 쉬웠다(디자이너 검토)
+  if ((watchId != null || cov < 0.9) && !confirm(`지금 끝내고 별을 받을까요? 모양 길 ${Math.round(cov * 100)}%예요${cov < 0.9 ? ' — 90%를 넘기면 1등성이 돼요' : ''}.`)) return;
   const before = stars.stars.slice(), firstOfKind = !before.some(x => x.shape === plan.shape && (plan.shape !== 'custom' || x.designId === plan.designId));
   const s = C.done(plan, walked, stars, { coverage: cov, walkedKm: +trackKm(pts).toFixed(2), skipped, kept, ontime });
   if (!store.set('stars', stars)) return; // 저장 실패 — 산책과 걸은 기록을 그대로 둔다
@@ -327,15 +354,15 @@ $('bDone').onclick = () => {
   const su = K.suName(K.suIndex(s.ll)), suNew = !before.some(x => Array.isArray(x.ll) && K.suIndex(x.ll) === K.suIndex(s.ll));
   const DIR = { 북방현무: '북쪽', 동방청룡: '동쪽', 남방주작: '남쪽', 서방백호: '서쪽' };
   const notes = [`모양 길의 ${Math.round(cov * 100)}%를 걸었어요${skipped ? ` (못 가는 길 ${Math.round(skipped * 100)}%는 빼고 셌어요)` : ''}`,
-    `서울시청에서 본 ${DIR[su.group]} 칸 「${su.name}수」${suNew ? '을 처음 채웠어요 — 도감의 둥근 판에 칠해져요' : '에 별이 하나 더 떴어요'}`,
+    `서울시청에서 본 ${DIR[su.group]} 칸 「${su.name}수」${suNew ? '를 처음 채웠어요 — 도감 「28수 둥근 판」에 칠해져요' : '에 별이 하나 더 떴어요'}`,
     kept ? '약속한 시각에 걸어서 한 등급 더 밝아요' : '', ontime != null ? `돌아갈 시각에 딱 맞춰 왔어요(${Math.abs(ontime)}초 ${ontime > 0 ? '늦게' : ontime < 0 ? '일찍' : '차이 없이'})` : '',
-    (s.mats || []).length ? `단골집 도장 ${s.mats.length}곳` : '', firstOfKind ? '모양 도감에 새로 올랐어요' : '',
+    (s.mats || []).length ? `단골집 도장 ${s.mats.length}곳` : '', firstOfKind ? '도감 「모양」 칸에 새로 올랐어요' : '',
     unlocked.length ? `업적: ${unlocked.map(a => esc(a.title)).join(' · ')}` : ''].filter(Boolean);
   const GR = ['', '가장 밝은 별', '밝은 별', '보통 별', '흐린 별', '아주 흐린 별'];
   $('info').innerHTML = `<div class="cele">${emoji(s.shape)} ${esc(shapeName(s))} · ${s.grade}등성(${GR[s.grade]})</div>
     <ul class="got">${notes.map(x => `<li>${x}</li>`).join('')}</ul>
     <div class="row" style="margin-top:6px"><button id="bCard">작품 카드 만들기</button><button id="bDex2">도감 보기</button></div>${skip.length ? `
-    <div class="row" style="margin-top:6px"><button id="bReport">못 가는 길 — 응답소·안전신문고에 붙일 문구 복사</button></div>` : ''}`;
+    <div class="row" style="margin-top:6px"><button id="bReport">못 가는 길 민원 문구 복사</button></div><p class="note" style="margin-top:4px">서울시 응답소·안전신문고에 붙여 넣어요. 앱은 아무 데도 보내지 않아요.</p>` : ''}`;
   if (skip.length) $('bReport').onclick = () => copyReport(skip);
   setFold(false, false);
   $('bCard').onclick = () => saveCard(s);
@@ -375,7 +402,7 @@ function drawSky() {
   S.forEach(s => {
     L.polyline(s.loopLL, { color: T('--star-line'), weight: 1, opacity: .45 }).addTo(skyLayer);
     L.circleMarker(s.ll, { radius: [0, 11, 8, 6, 4, 3][s.grade] || 3, color: s.gold ? T('--gold') : T('--star'), fillColor: s.gold ? T('--gold') : T('--star'), fillOpacity: 1, weight: s.gold ? 3 : 1 })
-      .addTo(skyLayer).bindTooltip(esc(`${s.grade}등성 · ${shapeName(s)} · ${s.date} · 새 길 ${s.newKm} km`));
+      .addTo(skyLayer).bindTooltip(esc(`${s.grade}등성 · ${shapeName(s)} · ${s.date} · 처음 걷는 길 ${s.newKm} km`));
     L.marker(s.ll, { icon: L.divIcon({ className: 'skyewrap', iconSize: null, html: `<div class="skye">${emoji(s.shape)}</div>` }), interactive: false }).addTo(skyLayer);
   });
   let nc = 0;
@@ -472,6 +499,8 @@ const curLen = () => Object.keys(lens()).find(k => lens()[k].radius === +store.g
 function setLen(k, save = true) {
   for (const b of document.querySelectorAll('#lenRow [data-len]')) { b.setAttribute('aria-pressed', String(b.dataset.len === k)); b.textContent = lens()[b.dataset.len].label; }
   $('bUnit').textContent = store.get('unit', 'km') === 'min' ? 'km로 보기' : '분으로 보기';
+  $('lenNote').hidden = !!lens()[k];
+  if (!lens()[k]) $('lenNote').textContent = `설정에서 고른 값 · 반경 ${store.get('radius', 1000)} m · 모양 ${store.get('size', 400)} m`;
   if (save && lens()[k]) { store.set('radius', lens()[k].radius); store.set('size', lens()[k].size); }
 }
 for (const b of document.querySelectorAll('#lenRow [data-len]')) b.onclick = () => setLen(b.dataset.len);
@@ -489,6 +518,7 @@ function setFold(on, save = true) {
   $('sheet').classList.toggle('folded', on);
   $('fold').setAttribute('aria-expanded', String(!on));
   $('fold').setAttribute('aria-label', on ? '메뉴 펼치기' : '메뉴 접기');
+  $('fold').querySelector('em').textContent = on ? '메뉴 펼치기' : '접기';
   if (save) store.set('fold', on);
 }
 // 누르기는 click에서 바꾼다 — pointerup에서 펼치면 시트가 먼저 커지고, 폰이 그 뒤에 만드는 click이
@@ -537,15 +567,15 @@ function renderDex() {
       <div class="n">${esc(c.name)}</div>
       <div class="m">${!c.got ? '아직이에요' : c.count ? `${c.count}번 · ${c.best}등성` : '안 걸었어요'}</div>${extra}</div>`; // 못 모은 칸도 흐린 그림·이름을 보여 줘 무엇을 모을지 알게 한다
   $('suRing').innerHTML = suSvg(S);
-  $('dexBase').innerHTML = D.base.map(c => cardHtml(c, c.got ? `<button class="sub" data-card="${c.key}">카드</button>` : '')).join('');
+  $('dexBase').innerHTML = D.base.map(c => cardHtml(c, c.got ? `<button class="sub" data-card="${c.key}">작품 카드</button>` : '')).join('');
   const act = store.get('activeDesign', null);
   $('dexMine').innerHTML = D.mine.length ? D.mine.map(c => {
     const id = c.key.slice(2);
     return cardHtml({ ...c, got: true }, `<button class="${id === act && store.get('pick', 'all') === 'custom' ? '' : 'sub'}" data-use="${id}">${id === act && store.get('pick', 'all') === 'custom' ? '✔ 다음 산책' : '이걸로 걷기'}</button>
-      ${c.count ? `<button class="sub" data-card="${c.key}">카드</button>` : ''}<button class="sub" data-del="${id}">지우기</button>`);
+      ${c.count ? `<button class="sub" data-card="${c.key}">작품 카드</button>` : ''}<button class="sub" data-del="${id}">지우기</button>`);
   }).join('') : '<p style="font-size:13px;color:var(--sub)">아직 도안이 없어요. 손으로 그리거나 그림을 올려 보세요.</p>';
   $('achList').innerHTML = A.map(a => `<div class="ach${a.ok ? '' : ' no'}"><div class="e">${a.emoji}</div>
-      <div class="t"><b>${esc(a.title)}</b> ${a.ok ? '<span class="ok">완료</span>' : ''}<br><span style="color:var(--sub)">${esc(a.desc)}</span>
+      <div class="t"><b>${esc(a.title)}</b> ${a.ok ? '<span class="ok">✓ 완료</span>' : ''}<br><span style="color:var(--sub)">${esc(a.desc)}</span>
       ${a.ok ? '' : `<div class="bar" style="margin-top:4px"><i style="width:${pct(a.progress)}%"></i></div>`}</div></div>`).join('');
   const MS = K.matStamps(S);
   loadMat().then(all => {
@@ -663,7 +693,7 @@ $('bSkip').onclick = () => {
     : '이 근처는 모양 길이 여러 번 겹쳐 지나서 한 번에 너무 많이 빠져요. 조금 옮겨서 눌러 주세요.');
   tr.skip = skip; store.set('track', tr);
   L.marker(here, { icon: L.divIcon({ className: 'skipwrap', html: '<div class="skip">✕</div>', iconSize: null }), interactive: false }).addTo(meLayer);
-  status(`이 근처 모양 길을 판정에서 뺐어요 · 지금까지 ${Math.round(after * 100)}% 뺌. 다녀온 뒤 알림 문구를 복사할 수 있어요.`);
+  status(`이 근처 모양 길을 판정에서 뺐어요 · 지금까지 ${Math.round(after * 100)}% 뺌. 다녀온 뒤 민원 문구를 복사할 수 있어요.`);
 };
 // 알림 문구: 자리는 약 50 m 단위로 뭉갠다. 앱은 어디로도 보내지 않는다 — 사용자가 직접 붙여 넣는다
 const grid = v => (Math.round(v / 0.0005) * 0.0005).toFixed(4);
@@ -682,9 +712,39 @@ const promiseText = v => { const d = new Date(v); return `${d.getMonth() + 1}월
 // 판정 쪽지: 이 별이 어느 규칙으로 떴는지(규칙이 바뀌어도 남는다). 좌표는 담지 않는다
 function ruleNote(s) {
   return [`판정 규칙 ${s.rule || 2} · 모양 길 ${Math.round(s.coverage * 100)}% 지남(기준 ${Math.round(C.NEED * 100)}%)`,
-    s.skipped ? `못 걷는 길 ${Math.round(s.skipped * 100)}% 뺌` : '', s.kept ? '약속 지킴' : '', s.ontime != null ? `정각 ${s.ontime >= 0 ? '+' : ''}${s.ontime}초` : ''].filter(Boolean).join(' · ');
+    s.skipped ? `못 가는 길 ${Math.round(s.skipped * 100)}% 뺌` : '', s.kept ? '약속 지킴' : '', s.ontime != null ? `정각 ${s.ontime >= 0 ? '+' : ''}${s.ontime}초` : ''].filter(Boolean).join(' · ');
 }
 
-if (plan) { drawPlan(plan); status(plan.promise ? `약속한 산책이 있어요 · ${promiseText(plan.promise)}. 그때 「걷기 시작」을 눌러 주세요.` : '하던 산책이 있어요. 「걷기 시작」으로 이어서 걸어요.'); }
+// 지도 위 단추(내 위치로)가 아래 시트에 가리지 않게 시트 높이를 CSS에 넘긴다
+const syncH = () => { const s = document.documentElement.style; s.setProperty('--sheet-h', $('sheet').offsetHeight + 'px'); s.setProperty('--top-h', $('top').offsetHeight + 'px'); };
+const ro = new ResizeObserver(syncH); ro.observe($('sheet')); ro.observe($('top'));
+if (!('vibrate' in navigator)) $('vibNote').hidden = false;
+$('alertBar').onclick = () => { $('alertBar').hidden = true; };
+// 숨긴 낭독 칸: 이정표·경고만 읽는다(급하면 assertive 칸)
+function say(t, urgent = false) { const el = $(urgent ? 'srAlert' : 'srLive'); el.textContent = ''; setTimeout(() => { el.textContent = t; }, 50); }
+// 돌아갈 시각 경고: 위 띠 색 + 지도 위 배너(진동이 없는 폰에서도 보이게)
+function backAlert(on) {
+  $('top').classList.toggle('alert', on); $('alertBar').hidden = !on;
+  if (on && plan && plan.backBy) $('alertBar').textContent = `지금 돌아가면 ${hm(plan.backBy)}에 맞춰요 · 누르면 닫혀요`;
+}
+// 「13:00」 → 「오후 1:00」(입력칸의 표기와 맞춘다)
+function hm(hhmm) { const [h, m] = hhmm.split(':').map(Number); return `${h < 12 ? '오전' : '오후'} ${((h + 11) % 12) + 1}:${String(m).padStart(2, '0')}`; }
+function quitPlan() {
+  const tr = store.get('track', null), km = tr && plan && tr.id === plan.id ? trackKm(tr.pts) : 0;
+  if (!confirm(`이 산책을 그만둘까요?${km > 0.01 ? ` 걸은 길 ${km.toFixed(2)} km 기록은 지워져요.` : ''}`)) return;
+  store.set('plan', null); store.set('track', null); stopWalk(); plan = null; drawPlan(null); meLayer.clearLayers();
+  $('bWalk').disabled = $('bDone').disabled = $('bGpx').disabled = true;
+  setFold(false, false);
+  status('산책을 그만뒀어요. 지도를 눌러 다시 시작해요.');
+}
+
+const trPrev = plan && store.get('track', null);
+if (plan && trPrev && trPrev.id === plan.id && trPrev.pts.length) {
+  drawPlan(plan);
+  L.polyline(trPrev.pts, { color: T('--path-go'), weight: 4 }).addTo(meLayer);
+  status(`하던 산책이 있어요 · 걸은 길 ${trackKm(trPrev.pts).toFixed(2)} km · 모양 길 ${Math.round(C.coverage(plan.loopLL, trPrev.pts, 20, 40, trPrev.skip) * 100)}%. 「걷기 시작」으로 이어요.`);
+} else if (plan) { drawPlan(plan); status(plan.promise ? `약속한 산책이 있어요 · ${promiseText(plan.promise)}. 그때 「걷기 시작」을 눌러 주세요.` : '하던 산책이 있어요. 「걷기 시작」으로 이어서 걸어요.'); }
+syncH(); // 처음 한 번은 바로(관찰 콜백은 그리기 단계에서야 온다)
+if (plan) setTimeout(() => plan && fit(L.polyline(plan.fullLL).getBounds()), 400); // 다시 열 때는 글꼴·시트 높이가 자리 잡은 뒤 한 번 더 맞춘다
 loadMat(); // 단골집 자료가 있으면 설정·도감에 그 칸을 보인다
 window.__app = { setStart, C, outlineFromRGBA, map, addPoint, get plan() { return plan; } }; // 점검용

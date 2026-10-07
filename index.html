@@ -42,7 +42,7 @@
   --green:oklch(74% 0.17 140);
   --tag:oklch(52% 0.13 320);
   --path-go:var(--navy);
-  --path-back:oklch(62% 0.015 260);
+  --path-back:oklch(45% 0.03 260);
   --gold:oklch(80% 0.14 85);
   --focus:oklch(57% 0.21 264);
   --sky:oklch(22% 0.07 255);
@@ -61,7 +61,7 @@
 /* 밤하늘 화면 — 디소 남색 띠가 그대로 하늘이 된다 */
 :root[data-theme="dark"]{--bg:var(--sky);--panel:var(--sky-2);--ink:var(--sky-ink);--ink-2:var(--sky-sub);--sub:var(--sky-sub);--line:oklch(36% 0.07 255);--rule:oklch(36% 0.07 255);--paper-2:oklch(31% 0.08 254);--paper-3:oklch(35% 0.08 254)}
 *{box-sizing:border-box}
-html,body{margin:0;height:100%;overflow-x:clip;background:var(--bg);color:var(--ink);font-family:var(--font-body);-webkit-text-size-adjust:100%;font-variant-numeric:tabular-nums}
+html,body{word-break:keep-all;overflow-wrap:anywhere;margin:0;height:100%;overflow-x:clip;background:var(--bg);color:var(--ink);font-family:var(--font-body);-webkit-text-size-adjust:100%;font-variant-numeric:tabular-nums}
 h3,h4,.ttl,.cele,.wordmark{font-family:var(--font-display);font-weight:700;font-style:normal;letter-spacing:-0.02em}
 #map{position:fixed;inset:0}
 svg.i{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
@@ -74,22 +74,22 @@ svg.i{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-widt
 /* 아래 메뉴 */
 #sheet{position:fixed;z-index:1000;left:0;right:0;bottom:0;padding:0 var(--space-lg) calc(env(safe-area-inset-bottom) + var(--space-sm));
   background:var(--panel);border-top:2px solid var(--navy)}
-#fold{display:flex;width:100%;max-width:520px;margin:0 auto;min-height:26px;border:0;background:transparent;padding:6px 0 4px;touch-action:none;cursor:grab;justify-content:center}
-#fold span{display:block;width:40px;height:4px;background:var(--rule)}
-#fold em{display:none;font-style:normal;font-size:14px;font-weight:600;color:var(--ink);margin-left:8px}
+#fold{display:flex;width:100%;max-width:520px;margin:0 auto;min-height:36px;align-items:center;border:0;background:transparent;padding:6px 0 4px;touch-action:none;cursor:grab;justify-content:center}
+#fold span{display:block;width:48px;height:5px;background:var(--ink-2)}
+#fold em{display:inline;font-style:normal;font-size:14px;font-weight:600;color:var(--ink);margin-left:8px}
 #sheet.folded #fold{align-items:center}
 #sheet.folded #fold em{display:inline}
 .seg{margin-bottom:var(--space-sm)}
-.seg button{min-height:36px;padding-inline:4px;font-size:13px;font-weight:400;color:var(--ink-2)}
+.seg button{min-height:44px;padding-inline:4px;font-size:13px;font-weight:400;color:var(--ink-2)}
 .seg button[aria-pressed="true"]{border-color:var(--navy);color:var(--navy);font-weight:700;background:var(--paper-2)}
 @media (max-width:359px){.seg button{font-size:12px;letter-spacing:-0.02em}} /* 320 px에서 눌린 칸(굵게)이 넘치지 않게 */
 #sheet.folded .seg,#sheet.folded .unit{display:none}
-.unit{justify-content:flex-end;margin-bottom:2px}
-button.link{flex:none;min-height:24px;border:0;background:none;padding:0 2px;font-size:12px;font-weight:400;color:var(--ink-2);text-decoration:underline;text-underline-offset:2px}
-#info .meta input[type=time]{font:inherit;font-size:13px;border:1px solid var(--line);border-radius:var(--radius);padding:1px 4px;background:var(--paper);color:var(--ink)}
+.unit{position:absolute;top:0;right:var(--space-lg);margin:0;width:auto}
+button.link{flex:none;min-height:40px;border:0;background:none;padding:0 8px;font-size:13px;font-weight:400;color:var(--ink-2);text-decoration:underline;text-underline-offset:2px}
+#info .meta input[type=time]{font:inherit;font-size:16px;min-height:36px;border:1px solid var(--line);border-radius:var(--radius);padding:1px 4px;background:var(--paper);color:var(--ink)}
 .pin.far{border-style:dashed;opacity:.8}
 #info .promise{margin-top:6px;font-size:13px;color:var(--ink-2)}
-#info .promise summary{cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+#info .promise summary{display:inline-flex;align-items:center;min-height:36px;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
 #info .promise input{font:inherit;font-size:13px;border:1px solid var(--line);border-radius:var(--radius);padding:1px 4px;background:var(--paper);color:var(--ink);margin:4px 0}
 #info .promise small{display:block;color:var(--sub)}
 .skipwrap{background:none;border:none}
@@ -134,11 +134,20 @@ button.icon{flex:0 0 50px}
 #info .sw{display:inline-block;width:22px;height:0;border-top:3px dotted var(--path-go)}
 #info .sw.loop{border-top:3px solid var(--accent)}
 #info .sw.back{border-top-color:var(--path-back)}
-#info .meta{font-size:12px;color:var(--sub);margin-top:4px}
+#info .meta{font-size:13px;color:var(--sub);margin-top:4px}
+#info .rule{font-size:13px;color:var(--ink);margin-top:2px}
+.lennote{max-width:520px;margin:0 auto var(--space-sm);font-size:12px;color:var(--sub)}
+.mapbtn{position:fixed;z-index:900;right:12px;bottom:calc(var(--sheet-h, 220px) + 12px);width:44px;height:44px;min-height:44px;padding:0;flex:none;background:var(--paper);border:1px solid var(--navy);border-radius:0;display:flex;align-items:center;justify-content:center}
+#top.alert{background:oklch(52% 0.19 30)}
+#alertBar{position:fixed;z-index:1001;left:0;right:0;top:calc(var(--top-h, 60px));padding:14px var(--space-lg);background:oklch(52% 0.19 30);color:#fff;font-size:18px;font-weight:700;cursor:pointer}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+:root[data-theme="dark"] .mapbtn,:root[data-theme="dark"] #alertBar{display:none}
 #info .more{margin-top:4px;font-size:12px;color:var(--sub)}
-#info .more summary{cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+#info .more summary::before,#info .promise summary::before{content:'▸ ';text-decoration:none}
+#info .more[open]>summary::before,#info .promise[open]>summary::before{content:'▾ '}
+#info .more summary{display:inline-flex;align-items:center;min-height:36px;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
 #info .got{margin:6px 0 0;padding-left:18px;font-size:13px;color:var(--ink);line-height:1.6}
-#sheet.active .unit{display:none}
+#sheet.active .unit,#sheet.active .seg,#sheet.active .lennote{display:none} /* 산책이 있는 동안엔 지도를 넓게 — 거리를 바꾸려면 「이 산책 그만두기」(10-08 디자이너 검토 뒤) */
 #info .cele{font-size:17px;color:var(--ink)}
 #info .cele small{display:block;font-size:13px;font-weight:400;color:var(--sub);margin-top:2px}
 #info .row button{min-height:42px;font-size:14px}
@@ -188,30 +197,30 @@ details.adv summary{cursor:pointer;font-size:14px;color:var(--ink-2)}
 #dDex h3{margin:0 0 var(--space-xs);font-size:22px}
 #dDex h4{margin:var(--space-xl) 0 var(--space-sm);font-size:16px;padding-bottom:6px;border-bottom:2px solid var(--navy)}
 #dDex h4 small{font-weight:400;font-size:12px;color:var(--sub);display:block;margin-top:2px}
-.bar{height:4px;background:var(--paper-3);overflow:hidden}
+.bar{height:6px;background:var(--paper-3);overflow:hidden;box-shadow:inset 0 0 0 1px var(--ink-2)}
 .bar i{display:block;height:100%;background:var(--accent)}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:0;border-top:1px solid var(--line);border-left:1px solid var(--line)}
 .card{border:0;border-right:1px solid var(--line);border-bottom:1px solid var(--line);padding:var(--space-sm) 6px;text-align:center;background:var(--panel);position:relative;min-width:0}
 .card .e{font-size:26px;line-height:1.25}
 .card .n{font-size:13px;font-weight:600;overflow-wrap:anywhere}
-.card .m{font-size:11px;color:var(--sub)}
+.card .m{font-size:12px;color:var(--sub)}
 .card.locked .e{filter:grayscale(1);opacity:.3}
 .card.locked .n{color:var(--sub);font-weight:400}
 .card.gold{background:oklch(97% 0.03 90)}
 .card .tag{position:absolute;top:4px;right:6px;font-size:11px;color:var(--tag);margin:0}
-.card button{min-height:30px;font-size:12px;font-weight:400;margin-top:6px;width:100%}
+.card button{min-height:40px;font-size:12px;font-weight:400;margin-top:6px;width:100%}
 .ach{display:flex;gap:var(--space-md);align-items:center;padding:var(--space-sm) 0;border-bottom:1px solid var(--line)}
 .ach .e{font-size:20px;width:28px;text-align:center}
 .ach.no .e{filter:grayscale(1);opacity:.35}
 .ach .t{flex:1;font-size:13px}.ach .t b{font-size:14px}
-.ach .ok{color:var(--green);font-weight:700}
+.ach .ok{color:oklch(50% 0.14 145);font-weight:700}
 .chips{display:flex;flex-wrap:wrap;gap:6px}
 .chip{border:1px solid var(--navy);color:var(--navy);padding:3px 8px;font-size:13px}
 .mat{display:flex;justify-content:space-between;gap:var(--space-sm);padding:6px 0;border-bottom:1px solid var(--line);font-size:13px}
 .mat small{color:var(--sub)}
-.note{font-size:11px;color:var(--sub);line-height:1.6;margin:var(--space-sm) 0 0}
+.note{font-size:12px;color:var(--sub);line-height:1.6;margin:var(--space-sm) 0 0}
 #suRing svg{display:block;width:100%;max-width:320px;margin:0 auto}
-#suRing .w{fill:var(--paper-2);stroke:var(--rule);stroke-width:1}
+#suRing .w{fill:var(--paper-2);stroke:var(--ink-2);stroke-width:1}
 #suRing .w.on{fill:var(--accent)}
 #suRing .w.done{fill:var(--navy)}
 #suRing text{font:600 13px var(--font-body);fill:var(--ink);text-anchor:middle;dominant-baseline:central}
@@ -240,14 +249,14 @@ details.adv summary{cursor:pointer;font-size:14px;color:var(--ink-2)}
   <div class="row seg" id="lenRow" role="group" aria-label="얼마나 걸을까요">
     <button data-len="short" aria-pressed="false">짧게 · 2~3.5 km</button><button data-len="mid" aria-pressed="false">보통 · 4.5~6 km</button><button data-len="long" aria-pressed="false">길게 · 6 km 이상</button>
   </div>
+  <p id="lenNote" class="lennote" hidden></p>
   <div class="row r1">
-    <button id="bLoc" class="icon" aria-label="내 위치에서 출발"><svg class="i"><use href="#i-loc"/></svg></button>
     <button id="bPlan" class="primary">산책 뽑기</button>
   </div>
   <div class="row r2">
     <button id="bWalk" disabled><svg class="i"><use href="#i-walk"/></svg>걷기 시작</button>
+    <button id="bSkip" hidden aria-label="못 가는 길 — 이 근처 모양 길을 별 판정에서 빼기">못 가는 길</button>
     <button id="bDone" disabled><svg class="i"><use href="#i-stamp"/></svg>다녀왔어요</button>
-    <button id="bSkip" hidden aria-label="이 길 못 가요 — 이 근처 모양 길을 별 판정에서 빼기">이 길 빼기</button>
   </div>
   <div class="tabs">
     <button id="bSky"><svg class="i"><use href="#i-moon"/></svg><span>밤하늘</span></button>
@@ -255,29 +264,34 @@ details.adv summary{cursor:pointer;font-size:14px;color:var(--ink-2)}
     <button id="bSet"><svg class="i"><use href="#i-gear"/></svg>설정</button>
   </div>
 </div>
+<button id="bLoc" class="mapbtn" aria-label="내 위치로"><svg class="i"><use href="#i-loc"/></svg></button>
+<div id="alertBar" hidden></div>
+<div id="srLive" class="sr" aria-live="polite"></div><div id="srAlert" class="sr" aria-live="assertive"></div>
 <dialog id="dSet">
   <form method="dialog">
     <h3 style="margin:0">설정</h3>
     <label for="sPick">무엇을 그릴까요</label>
     <select id="sPick"><option value="all">아무거나</option><option value="geo">도형(별·하트·세모…)</option><option value="animal">동물(물고기·고양이·토끼·고래)</option><option value="plant">식물(잎·나무·튤립·꽃·선인장)</option><option value="custom">내 도안(도감에서 고른 것)</option></select>
-    <label for="sRadius">얼마나 멀리</label>
-    <select id="sRadius"><option value="250">아주 가까이 · 250 m</option><option value="350">가까이 · 350 m</option><option value="500">가까이 · 반경 500 m</option><option value="1000">가볍게 · 반경 1 km (왕복 3~4 km쯤)</option><option value="1500">조금 더 · 1.5 km</option><option value="2000">멀리 · 2 km (왕복 5~6 km쯤)</option><option value="3000">아주 멀리 · 3 km</option></select>
-    <label for="sSize">모양 크기</label>
-    <select id="sSize"><option value="150">아주 작게 · 150 m</option><option value="200">더 작게 · 200 m</option><option value="300">작게 · 300 m</option><option value="400">보통 · 400 m</option><option value="600">크게 · 600 m</option><option value="800">아주 크게 · 800 m</option></select>
-    <p>동물·식물·내 도안은 알아볼 수 있게 600 m 이상으로 그려요. 크게 그릴수록 길 위 모양이 더 닮아요.</p>
     <div id="matSet" hidden>
       <label for="sMat">시청 단골집 들르기</label>
-      <select id="sMat"><option value="off">상관없음</option><option value="on">단골집 근처를 도착지로</option></select>
+      <select id="sMat"><option value="off">상관없음</option><option value="on">단골집 근처에서 모양 그리기</option></select>
     </div>
-    <label for="sVib">돌아갈 시각 진동(분으로 볼 때)</label>
+    <label for="sVib">돌아갈 시각 알림 진동(분으로 볼 때)</label>
     <select id="sVib"><option value="on">켬</option><option value="off">끔</option></select>
+    <p id="vibNote" hidden>이 폰(브라우저)은 진동 알림이 안 돼요. 맨 위 안내 글 색이 바뀌어 알려요.</p>
     <label>내 기록은 어디에</label>
-    <p>걸은 길·별·도안은 이 폰의 브라우저에만 저장돼요. 서버로 보내지 않아요. 다만 지도 그림은 OpenStreetMap(또는 V-World)에서, 도착지 이름은 OpenStreetMap에서 받아 오므로 그곳은 지금 보는 지역을 알 수 있어요. 브라우저 기록을 지우면 별도 사라지니 가끔 내보내 두세요.</p>
+    <p>걸은 길·별·도안은 이 폰의 브라우저에만 저장돼요. 서버로 보내지 않아요. 다만 지도 그림은 OpenStreetMap(또는 V-World)에서, 모양 그리는 곳과 끝낼 곳의 동네 이름은 OpenStreetMap에서 받아 오므로 그곳은 지금 보는 지역을 알 수 있어요. 브라우저 기록을 지우면 별도 사라지니 가끔 내보내 두세요.</p>
     <div class="row"><button type="button" id="bExport">기록 내보내기</button><button type="button" id="bImport">가져오기</button></div>
     <p>내보낸 파일에는 산책한 자리(좌표)와 걸은 길이 들어 있어요. 폰을 옮길 때만 쓰고 남에게 보내지 마세요.</p>
     <input type="file" id="fImport" accept="application/json" hidden>
     <details class="adv">
       <summary>고급</summary>
+      <p>보통은 아래 화면의 「짧게·보통·길게」로 충분해요. 여기서 고르면 그 칸들이 꺼져요.</p>
+      <label for="sRadius">출발점에서 모양 그리는 곳까지</label>
+      <select id="sRadius"><option value="250">250 m</option><option value="350">350 m</option><option value="500">500 m</option><option value="1000">1 km(왕복 3~4 km쯤)</option><option value="1500">1.5 km</option><option value="2000">2 km(왕복 5~6 km쯤)</option><option value="3000">3 km</option></select>
+      <label for="sSize">모양 크기(도형만)</label>
+      <select id="sSize"><option value="150">150 m</option><option value="200">200 m</option><option value="300">300 m</option><option value="400">400 m</option><option value="600">600 m</option><option value="800">800 m</option></select>
+      <p>동물·식물·내 도안은 이 설정과 상관없이 알아볼 수 있게 600 m 이상으로 그려요.</p>
       <label for="sBase">배경 지도</label>
       <select id="sBase"><option value="osm">OpenStreetMap</option><option value="vw-Base">V-World 일반(국토교통부)</option><option value="vw-Satellite">V-World 위성</option><option value="vw-white">V-World 흰색</option></select>
       <label for="sKey">V-World 인증키</label>
@@ -297,7 +311,7 @@ details.adv summary{cursor:pointer;font-size:14px;color:var(--ink-2)}
     <div id="dexSum"></div>
     <h4>모양</h4>
     <div class="grid" id="dexBase"></div>
-    <h4>28수(宿)<small>서울시청에서 본 방위로, 별이 뜬 자리가 그 칸을 채워요</small></h4>
+    <h4>28수 둥근 판<small>서울시청에서 본 방위로, 별이 뜬 자리가 그 칸을 채워요</small></h4>
     <div id="suRing"></div>
     <p class="note">조선 천상열차분야지도의 28수를 서울에 옮긴 놀이용 배정이에요. 한 방위의 7수를 다 채우면 사신(청룡·현무·백호·주작) 도장을 받아요.</p>
     <h4>내 도안<small>직접 만든 모양으로 걸으면 도감에 내 칸이 생겨요</small></h4>
