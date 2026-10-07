@@ -37,7 +37,7 @@ export function shapes() {
   };
 }
 export const SHAPE_KO = { star: '별', triangle: '세모', heart: '하트', square: '네모', circle: '동그라미',
-  fish: '물고기', cat: '고양이', rabbit: '토끼', whale: '고래', leaf: '나뭇잎', tree: '나무', tulip: '튤립', flower: '꽃', cactus: '선인장', custom: '내 그림' };
+  fish: '물고기', cat: '고양이', rabbit: '토끼', whale: '고래', leaf: '나뭇잎', tree: '나무', tulip: '튤립', flower: '꽃', cactus: '선인장', custom: '내 도안' };
 export const EMOJI = { star: '⭐', triangle: '🔺', heart: '💗', square: '🟦', circle: '⭕',
   fish: '🐟', cat: '🐱', rabbit: '🐰', whale: '🐳', leaf: '🍃', tree: '🌲', tulip: '🌷', flower: '🌸', cactus: '🌵', custom: '🖼️' };
 export const CATEGORY = {
@@ -75,7 +75,11 @@ export function buildGraph(tiles, proj, radius, hwNames) {
     if (cnt > bestN) { bestN = cnt; best = c; }
   }
   for (const id of [...nodes.keys()]) if (comp.get(id) !== best) nodes.delete(id);
-  return { nodes, ids: [...nodes.keys()] };
+  const ids = [...nodes.keys()];
+  // 50 m 격자 색인 — 가장 가까운 교차점 찾기를 전체 훑기에서 주변 칸 훑기로(10-08 검토: 경유점마다 전체를 훑어 수 초 걸림)
+  const grid = new Map();
+  ids.forEach((id, ord) => { const n = nodes.get(id); n.ord = ord; const k = Math.floor(n.x / CELL) + ',' + Math.floor(n.y / CELL); (grid.get(k) || grid.set(k, []).get(k)).push(id); });
+  return { nodes, ids, grid };
 }
 
 // 최소 힙
@@ -87,7 +91,8 @@ class Heap {
 }
 
 // A* (직선거리 하한) — 최단 경로를 돌려준다. 없으면 null
-export function shortest(G, s, t) {
+// enter(v)를 주면 마디 v로 들어가는 구간 길이에 곱할 배수(≥1)를 준다 — 배수가 1 이상이라 직선거리 하한은 그대로 맞다
+export function shortest(G, s, t, enter = null) {
   if (s === t) return [s];
   const N = G.nodes, T = N.get(t), h = id => { const n = N.get(id); return Math.hypot(n.x - T.x, n.y - T.y); };
   const g = new Map([[s, 0]]), prev = new Map(), done = new Set(), q = new Heap();
@@ -99,7 +104,7 @@ export function shortest(G, s, t) {
     done.add(u);
     const gu = g.get(u);
     for (const [v, w] of N.get(u).adj) {
-      const nv = gu + w;
+      const nv = gu + (enter ? w * enter(v) : w);
       if (nv < (g.get(v) ?? Infinity)) { g.set(v, nv); prev.set(v, u); q.push(nv + h(v), v); }
     }
   }
@@ -123,22 +128,65 @@ export function densify(pts, step) {
   return out;
 }
 
+const CELL = 50;
+// 격자 칸을 안쪽부터 넓혀 가며 찾는다. 결과는 전체 훑기와 같다(같은 거리면 먼저 들어온 마디 — Python판과 같은 동률 처리)
 export function nearest(G, p) {
-  let best = null, bd = Infinity;
-  for (const id of G.ids) { const n = G.nodes.get(id), d = (n.x - p[0]) ** 2 + (n.y - p[1]) ** 2; if (d < bd) { bd = d; best = id; } }
+  if (!G.grid) { // 색인 없는 그래프(시험용)
+    let best = null, bd = Infinity;
+    for (const id of G.ids) { const n = G.nodes.get(id), d = (n.x - p[0]) ** 2 + (n.y - p[1]) ** 2; if (d < bd) { bd = d; best = id; } }
+    return best;
+  }
+  const cx = Math.floor(p[0] / CELL), cy = Math.floor(p[1] / CELL);
+  let best = null, bd = Infinity, bo = Infinity;
+  for (let r = 0; r < 400; r++) {
+    for (let dx = -r; dx <= r; dx++) for (let dy = -r; dy <= r; dy++) {
+      if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue; // 고리 한 겹만
+      for (const id of G.grid.get((cx + dx) + ',' + (cy + dy)) || []) {
+        const n = G.nodes.get(id), d = (n.x - p[0]) ** 2 + (n.y - p[1]) ** 2;
+        if (d < bd || (d === bd && n.ord < bo)) { bd = d; best = id; bo = n.ord; }
+      }
+    }
+    // r겹까지 본 칸 밖의 점은 적어도 r·CELL 떨어져 있다
+    if (best !== null && Math.sqrt(bd) <= r * CELL) return best;
+  }
   return best;
 }
 
-export function route(G, target, step) {
+// corridor > 0 이면 「통로 경로」: 모양 선에서 d만큼 떨어진 마디로 들어가는 비용에 (1 + corridor·(d/σ)²)를 곱한다.
+// 경유점 사이를 그냥 최단 길로 잇지 않고 모양 선을 따라가는 길을 고른다(10-08, 닮음 개선)
+export function route(G, target, step, corridor = 0, sigma = 30) {
   const snap = densify(target, step).map(p => nearest(G, p));
   const path = [snap[0]];
+  let enter = null;
+  if (corridor > 0) {
+    const memo = new Map();
+    enter = v => {
+      let m = memo.get(v);
+      if (m === undefined) { const n = G.nodes.get(v); const d = lineDist([n.x, n.y], target) / sigma; m = 1 + corridor * d * d; memo.set(v, m); }
+      return m;
+    };
+  }
   for (let i = 0; i + 1 < snap.length; i++) {
     if (snap[i] === snap[i + 1]) continue;
-    const seg = shortest(G, snap[i], snap[i + 1]);
+    const seg = shortest(G, snap[i], snap[i + 1], enter);
     if (!seg) return null;
     path.push(...seg.slice(1));
   }
-  return path;
+  if (corridor <= 0) return path;
+  // 모양 선에서 σ 넘게 벗어난 끝점만 잔가지로 본다 — 별의 뾰족한 끝처럼 모양이 원래 「갔다 오는」 자리는 남긴다(10-08 비교 그림에서 별 팔이 잘림)
+  const off = v => { const n = G.nodes.get(v); return lineDist([n.x, n.y], target) > sigma; };
+  return prune(path, off);
+}
+
+// 잔가지 잘라내기: …A→B→A… 처럼 들어갔다 그대로 되돌아 나오는 구간을 지운다(경유점 하나를 찍으려 막다른 길에 들어간 자국).
+// 닫힌 고리의 처음·끝은 건드리지 않는다
+export function prune(path, off = () => true) {
+  const out = [];
+  for (const v of path) {
+    if (out.length >= 2 && out[out.length - 2] === v && off(out[out.length - 1])) { out.pop(); continue; }
+    out.push(v);
+  }
+  return out;
 }
 
 // ---------- 점수 ----------
@@ -170,17 +218,36 @@ export function score(G, path, target) {
 }
 
 // angles를 주면 그 회전만 본다(그림 모양은 ±30°). 없으면 rots등분 — Python판과 같다
-export function search(G, unit, size, maxKm, { step, rots = 24, angles = null, shifts = [0], scales = [0.8, 1.0, 1.2], center = [0, 0] } = {}) {
-  step = step || Math.max(40, size / 12);
+// 이산 프레셰 거리: 두 선을 같은 방향으로만 나아가며 짝지을 때 필요한 가장 긴 줄 — 순서가 엉키거나 되돌아 나오면 커진다.
+// 평균 거리(score)는 잔가지가 모양 근처를 찔러 주면 오히려 좋아지는 구멍이 있어(10-08 측정) 닮음 판정에 함께 쓴다
+export function frechet(A, B, n = 80) {
+  const rs = L => { const T = lineLen(L); return Array.from({ length: n }, (_, i) => interp(L, T * i / (n - 1))); };
+  const P = rs(A), Q = rs(B), prev = new Float64Array(n), cur = new Float64Array(n);
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) {
+      const d = Math.hypot(P[i][0] - Q[j][0], P[i][1] - Q[j][1]);
+      const m = i === 0 && j === 0 ? 0 : i === 0 ? cur[j - 1] : j === 0 ? prev[j] : Math.min(prev[j], prev[j - 1], cur[j - 1]);
+      cur[j] = Math.max(d, m);
+    }
+    prev.set(cur);
+  }
+  return prev[n - 1];
+}
+
+// order = true 면 고르는 기준을 「평균 거리 + 프레셰 거리/2」로 — 순서·잔가지까지 본다(통로 방식과 함께 쓴다)
+export function search(G, unit, size, maxKm, { step, rots = 24, angles = null, shifts = [0], scales = [0.8, 1.0, 1.2], center = [0, 0], corridor = 0, sparse = 1, order = false } = {}) {
+  step = (step || Math.max(40, size / 12)) * sparse; // sparse > 1 이면 경유점을 성기게 — 사이는 통로 비용이 모양을 따라가게 한다
   angles = angles || Array.from({ length: rots }, (_, r) => 2 * Math.PI * r / rots);
   let best = null;
   for (const sc of scales) for (const ang of angles) for (const dx of shifts) for (const dy of shifts) {
     const tgt = placeShape(unit, size * sc, ang, center[0] + dx, center[1] + dy);
-    const p = route(G, tgt, step);
+    const p = route(G, tgt, step, corridor, Math.max(25, size * sc / 16));
     if (!p) continue;
     const [s, L] = score(G, p, tgt);
     if (L > maxKm * 1000) continue;
-    if (!best || s < best.dev) best = { dev: s, len: L, path: p, tgt };
+    const fr = order ? frechet(p.map(id => { const n = G.nodes.get(id); return [n.x, n.y]; }), tgt) : 0;
+    const key = order ? s + fr / 2 : s;
+    if (!best || key < best.key) best = { dev: s, fr, key, len: L, path: p, tgt };
   }
   return best;
 }
@@ -210,6 +277,8 @@ export function grade(devRatio, newFrac) {
   return Math.min(5, g + (newFrac < 0.3 ? 1 : 0));
 }
 
+// 현지 날짜 yymmdd — toISOString은 UTC라 한국 새벽 0~9시 원정이 하루 전 날짜로 찍혔다(10-08 검토)
+const localYmd = (d = new Date()) => String(d.getFullYear()).slice(2) + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0');
 const COMPASS = ['동', '북동', '북', '북서', '서', '남서', '남', '남동'];
 const pathLen = (G, p) => { let s = 0; for (let i = 0; i + 1 < p.length; i++) { const a = G.nodes.get(p[i]), b = G.nodes.get(p[i + 1]); s += Math.hypot(a.x - b.x, a.y - b.y); } return s; };
 
@@ -222,8 +291,8 @@ export function plan(G, proj, start, radius, size, seed, { pick = 'all', custom 
     const close = cand.filter(id => { const n = G.nodes.get(id); return near.some(([x, y]) => (n.x - x) ** 2 + (n.y - y) ** 2 < 150 * 150); });
     if (close.length) cand = close;
   }
-  if (!cand.length) throw new Error('조건에 맞는 도착지가 없어요 — 반경을 바꿔 보세요');
-  if (pick === 'custom' && !(custom && custom.pts && custom.pts.length >= 4)) throw new Error('먼저 설정에서 내 그림을 올려 주세요');
+  if (!cand.length) throw new Error('갈 만한 곳을 찾지 못했어요. 설정에서 거리를 바꿔 보세요.');
+  if (pick === 'custom' && !(custom && custom.pts && custom.pts.length >= 4)) throw new Error('먼저 도감에서 내 도안을 만들어 주세요.');
   const pool = pick === 'all' ? [...CATEGORY.geo, ...CATEGORY.animal, ...CATEGORY.plant] : pick === 'custom' ? ['custom'] : CATEGORY[pick];
   const S = shapes(), s0 = nearest(G, start);
   let best = null, p = null, shape = null, sz = size;
@@ -233,10 +302,12 @@ export function plan(G, proj, start, radius, size, seed, { pick = 'all', custom 
     onTry && onTry(i + 1);
     const n = G.nodes.get(p), fig = isFigure(shape);
     sz = fig ? Math.max(size, FIGURE_MIN_SIZE) : size;
+    // 통로 경로 + 성긴 경유점 + 순서 닮음 + 자리 9곳(10-08 bench_shape: 프레셰 18.4→12.7%, 길이비 1.90→1.50, 계산 0.04→0.35 s)
+    const SHAPE_MODE = { corridor: 6, sparse: 2, order: true, shifts: [-sz / 8, 0, sz / 8] };
     best = search(G, shape === 'custom' ? custom.pts : S[shape], sz, 6,
-      fig ? { angles: FIGURE_ANGLES, scales: [0.9, 1.1], center: [n.x, n.y] } : { rots: 12, scales: [0.9, 1.1], center: [n.x, n.y] });
+      fig ? { angles: FIGURE_ANGLES, scales: [0.9, 1.1], center: [n.x, n.y], ...SHAPE_MODE } : { rots: 12, scales: [0.9, 1.1], center: [n.x, n.y], ...SHAPE_MODE });
   }
-  if (!best) throw new Error('여덟 번 뽑아도 모양을 그릴 자리가 없었어요');
+  if (!best) throw new Error('이 근처엔 모양을 그릴 자리가 없었어요. 다른 출발점을 골라 보세요.');
   const gold = R() < 1 / 12; // 반짝 원정(희귀) — 시드가 같으면 같다
   const go = shortest(G, s0, best.path[0]), back = shortest(G, best.path[best.path.length - 1], s0);
   const full = [...go, ...best.path.slice(1), ...back.slice(1)];
@@ -258,11 +329,11 @@ export function plan(G, proj, start, radius, size, seed, { pick = 'all', custom 
   let area = 0;
   for (let i = 0; i + 1 < best.path.length; i++) { const a = G.nodes.get(best.path[i]), b = G.nodes.get(best.path[i + 1]); area += a.x * b.y - b.x * a.y; }
   return {
-    id: new Date().toISOString().slice(2, 10).replaceAll('-', '') + '-' + seed, shape, seed,
+    id: localYmd() + '-' + seed, shape, seed,
     customName: shape === 'custom' ? custom.name || '내 그림' : null, designId: shape === 'custom' ? custom.id || null : null, gold,
     star: ll(p), center: proj.ll(cx, cy).map(v => +v.toFixed(6)), loopStart: ll(best.path[0]),
     dir, distKm: +(Math.hypot(cx - st.x, cy - st.y) / 1000).toFixed(1), turn: area > 0 ? '반시계' : '시계',
-    devM: +best.dev.toFixed(1), devRatio: +(best.dev / usedSize).toFixed(4), sizeM: Math.round(sz),
+    devM: +best.dev.toFixed(1), devRatio: +(best.dev / usedSize).toFixed(4), sizeM: Math.round(sz), likeness: likeness(best.fr / usedSize),
     goKm: +(pathLen(G, go) / 1000).toFixed(2), loopKm: +(best.len / 1000).toFixed(2), backKm: +(pathLen(G, back) / 1000).toFixed(2),
     totalKm: +(total / 1000).toFixed(2),
     goLL: go.map(ll), loopLL: best.path.map(ll), backLL: back.map(ll), fullLL: full.map(ll),
@@ -270,14 +341,30 @@ export function plan(G, proj, start, radius, size, seed, { pick = 'all', custom 
   };
 }
 
-export function done(rec, walked, stars) {
+// 닮음 별점(1~5): 순서 닮음(프레셰 ÷ 지름) — 10-08 측정 30건의 분포(중앙 12.7%)에 맞춘 구간
+export const likeness = r => r < 0.08 ? 5 : r < 0.11 ? 4 : r < 0.15 ? 3 : r < 0.2 ? 2 : 1;
+
+// 걸은 기록이 그린 길(고리)을 얼마나 지났나: 고리를 20 m 간격으로 나눠 40 m 안에 걸은 점이 있는 비율
+export function coverage(loopLL, trackLL, step = 20, near = 40) {
+  if (!loopLL.length || !trackLL.length) return 0;
+  const k = Math.cos(loopLL[0][0] * Math.PI / 180) * 111320, xy = ([a, b]) => [b * k, a * 110540];
+  const L = loopLL.map(xy), Tr = trackLL.map(xy), pts = densify(L, step);
+  let hit = 0;
+  for (const p of pts) if (Tr.some(q => (q[0] - p[0]) ** 2 + (q[1] - p[1]) ** 2 <= near * near)) hit++;
+  return hit / pts.length;
+}
+// 별 등급은 실제로 따라 걸은 비율로: 90%↑ 1등성 · 80%↑ 2 · 70%↑ 3 · 그 밖 4 (새 길이 30% 미만이면 한 등급 어둡게)
+export const gradeByCoverage = (cov, newFrac) => Math.min(5, (cov >= 0.9 ? 1 : cov >= 0.8 ? 2 : cov >= 0.7 ? 3 : 4) + (newFrac < 0.3 ? 1 : 0));
+
+export function done(rec, walked, stars, { coverage: cov = null, walkedKm = null } = {}) {
   let nw = 0, tot = 0;
   for (const [k, l] of Object.entries(rec.edgeLen)) { tot += l; if (!(k in walked)) nw += l; }
   const frac = tot ? nw / tot : 0;
   Object.assign(walked, rec.edgeLen);
   const star = { id: rec.id, date: rec.id.slice(0, 6), shape: rec.shape, name: rec.customName || null, designId: rec.designId || null,
     gold: !!rec.gold, dong: rec.dong || null, mats: rec.mats || [], totalKm: rec.totalKm || 0, ll: rec.center || rec.star, loopLL: rec.loopLL,
-    newKm: +(nw / 1000).toFixed(2), newFrac: +frac.toFixed(3), grade: grade(rec.devRatio, frac) };
+    newKm: +(nw / 1000).toFixed(2), newFrac: +frac.toFixed(3), grade: cov == null ? grade(rec.devRatio, frac) : gradeByCoverage(cov, frac),
+    coverage: cov == null ? null : +cov.toFixed(2), walkedKm };
   stars.stars.push(star);
   return star;
 }

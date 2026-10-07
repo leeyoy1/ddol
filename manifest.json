@@ -1,1 +1,1 @@
-{"name":"동네 별자리","short_name":"별자리","start_url":".","display":"standalone","background_color":"#0b1020","theme_color":"#0b1020","icons":[{"src":"icon.svg","sizes":"any","type":"image/svg+xml"}]}
+{"name":"동네 별자리","short_name":"별자리","description":"서울 골목을 걸으며 길 위에 모양을 그리면, 내 동네 밤하늘에 별이 하나 생겨요.","start_url":".","display":"standalone","background_color":"#f5efe2","theme_color":"#f5efe2","icons":[{"src":"icon-192.png","sizes":"192x192","type":"image/png"},{"src":"icon-512.png","sizes":"512x512","type":"image/png"},{"src":"icon.svg","sizes":"any","type":"image/svg+xml"}]}

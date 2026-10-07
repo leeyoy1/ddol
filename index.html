@@ -3,174 +3,275 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#0b1020">
+<meta name="theme-color" content="#f5efe2">
+<!-- 보안 정책: 스크립트는 이 사이트와 unpkg(Leaflet, 지문 고정)만. 끼어든 HTML의 인라인 스크립트·onerror는 실행되지 않는다(10-08 검토 H1 이중 방어) -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://unpkg.com; worker-src 'self'; style-src 'self' 'unsafe-inline' https://unpkg.com https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob: https://*.tile.openstreetmap.org https://api.vworld.kr; connect-src 'self' https://nominatim.openstreetmap.org; base-uri 'none'; form-action 'self'">
 <title>동네 별자리</title>
+<meta name="description" content="서울 골목을 걸으며 길 위에 모양을 그리면, 내 동네 밤하늘에 별이 하나씩 생겨요.">
+<meta property="og:title" content="동네 별자리">
+<meta property="og:description" content="서울 골목을 걸으며 길 위에 모양을 그리면, 내 동네 밤하늘에 별이 하나씩 생겨요.">
+<meta property="og:image" content="https://leeyoy1.github.io/ddol/og.png">
+<meta property="og:url" content="https://leeyoy1.github.io/ddol/">
+<meta property="og:type" content="website">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@700&family=Gowun+Dodum&display=swap">
 <!-- integrity: 외부 서버의 파일이 바뀌면 불러오지 않는다(10-07 계산) -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <style>
-:root{--bg:#f6f7fb;--panel:#ffffff;--ink:#14182b;--sub:#5b6478;--line:#e2e5ee;--accent:#e4572e;--star:#f5c542;--btn:#14182b;--btnink:#fff}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0b1020;--panel:#141a2e;--ink:#e8ecf6;--sub:#9aa3b8;--line:#262e48;--btn:#e8ecf6;--btnink:#0b1020}}
-:root[data-theme="dark"]{--bg:#0b1020;--panel:#141a2e;--ink:#e8ecf6;--sub:#9aa3b8;--line:#262e48;--btn:#e8ecf6;--btnink:#0b1020}
+/* Hallmark · genre: playful · theme: custom (vibe: "산책 수첩 · 미색 종이 · 인주 도장 · 밤하늘") · component-scope app shell
+ * paper oklch(96.5% 0.018 85) · accent(인주) oklch(56% 0.17 28) · display Gowun Batang 700 + body Gowun Dodum
+ * axes: light / classical-serif / warm · states: default · hover · focus · active · disabled
+ */
+:root{
+  --paper:oklch(96.5% 0.018 85);
+  --paper-2:oklch(93% 0.024 84);
+  --paper-3:oklch(89.5% 0.028 82);
+  --ink:oklch(27% 0.025 60);
+  --ink-2:oklch(46% 0.022 62);
+  --rule:oklch(85% 0.022 80);
+  --inju:oklch(54% 0.17 28);
+  --inju-hover:oklch(48% 0.16 28);
+  --on-inju:oklch(97% 0.012 85);
+  --path-go:oklch(50% 0.11 245);
+  --path-back:oklch(58% 0.02 62);
+  --gold:oklch(78% 0.13 85);
+  --focus:oklch(50% 0.13 245);
+  --sky:oklch(19% 0.04 270);
+  --sky-2:oklch(25% 0.045 270);
+  --sky-ink:oklch(92% 0.02 270);
+  --sky-sub:oklch(72% 0.04 270);
+  --star:oklch(94% 0.07 95);
+  --star-line:oklch(82% 0.05 270);
+  --font-display:"Gowun Batang",serif;
+  --font-body:"Gowun Dodum","Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  --space-xs:4px;--space-sm:8px;--space-md:12px;--space-lg:16px;--space-xl:24px;
+  --radius:10px;--radius-lg:14px;
+  --ease-out:cubic-bezier(.2,.7,.2,1);--dur:160ms;
+  --bg:var(--paper);--panel:var(--paper);--line:var(--rule);--sub:var(--ink-2);
+}
+/* 밤하늘 화면에서만 남색으로 */
+:root[data-theme="dark"]{--bg:var(--sky);--panel:var(--sky-2);--ink:var(--sky-ink);--ink-2:var(--sky-sub);--sub:var(--sky-sub);--line:oklch(34% 0.04 270);--rule:oklch(34% 0.04 270);--paper-2:oklch(29% 0.045 270);--paper-3:oklch(33% 0.045 270)}
 *{box-sizing:border-box}
-html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif}
+html,body{margin:0;height:100%;overflow-x:clip;background:var(--bg);color:var(--ink);font-family:var(--font-body);-webkit-text-size-adjust:100%}
+h3,h4,.ttl,.cele,.wordmark{font-family:var(--font-display);font-weight:700;font-style:normal;letter-spacing:-0.01em}
 #map{position:fixed;inset:0}
-#status{position:fixed;z-index:1000;top:calc(env(safe-area-inset-top) + 10px);left:12px;right:12px;margin:auto;max-width:520px;
-  background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px 12px;font-size:14px;line-height:1.4;box-shadow:0 2px 10px rgba(0,0,0,.12)}
-#sheet{position:fixed;z-index:1000;left:0;right:0;bottom:0;padding:10px 12px calc(env(safe-area-inset-bottom) + 12px);
-  background:var(--panel);border-top:1px solid var(--line);border-radius:16px 16px 0 0;box-shadow:0 -2px 12px rgba(0,0,0,.12)}
-.row{display:flex;gap:8px;max-width:520px;margin:0 auto}
-.row+.row{margin-top:8px}
-button{flex:1;min-height:48px;border:0;border-radius:12px;background:var(--btn);color:var(--btnink);font-size:15px;font-weight:600}
-button.sub{background:transparent;color:var(--ink);border:1px solid var(--line)}
-button:disabled{opacity:.4}
-#info{max-width:520px;margin:0 auto 8px;font-size:14px;color:var(--sub);min-height:20px}
-dialog{border:1px solid var(--line);border-radius:14px;background:var(--panel);color:var(--ink);width:min(92vw,420px)}
-dialog label{display:block;margin:10px 0 4px;font-size:14px}
-dialog input,dialog select{width:100%;min-height:44px;font-size:16px;border:1px solid var(--line);border-radius:10px;padding:0 10px;background:var(--bg);color:var(--ink)}
-dialog p{font-size:13px;color:var(--sub);line-height:1.5}
+svg.i{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+
+/* 위쪽 쪽지 */
+#status{position:fixed;z-index:1000;top:calc(env(safe-area-inset-top) + var(--space-sm));left:var(--space-md);right:var(--space-md);margin:auto;max-width:520px;
+  background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:var(--space-sm) var(--space-md);font-size:14px;line-height:1.5}
+#status .wordmark{display:block;font-size:17px;margin-bottom:2px}
+
+/* 아래 수첩 */
+#sheet{position:fixed;z-index:1000;left:0;right:0;bottom:0;padding:var(--space-md) var(--space-md) calc(env(safe-area-inset-bottom) + var(--space-sm));
+  background:var(--panel);border-top:1px solid var(--line);border-radius:var(--radius-lg) var(--radius-lg) 0 0}
+.row{display:flex;gap:var(--space-sm);max-width:520px;margin:0 auto}
+.row+.row{margin-top:var(--space-sm)}
+button{flex:1;min-width:0;min-height:46px;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);color:var(--ink);
+  font:inherit;font-size:15px;white-space:nowrap;display:inline-flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;
+  transition:background-color var(--dur) var(--ease-out),transform var(--dur) var(--ease-out)}
+button:hover{background:var(--paper-2)}
+button:active{transform:translateY(1px);background:var(--paper-3)}
+button:focus-visible,select:focus-visible,input:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+button:disabled{opacity:.42;cursor:not-allowed;transform:none}
+button.primary{background:var(--inju);border-color:var(--inju);color:var(--on-inju);font-family:var(--font-display);font-size:17px;min-height:52px}
+button.primary:hover{background:var(--inju-hover)}
+button.icon{flex:0 0 52px}
+/* 수첩 꼬리표 — 밤하늘·도감·설정은 낮은 목소리로 */
+.tabs{display:flex;max-width:520px;margin:var(--space-sm) auto 0;border-top:1px solid var(--line)}
+.tabs button{border:0;border-radius:0;background:transparent;min-height:44px;font-size:14px;color:var(--ink-2)}
+.tabs button:hover{background:transparent;color:var(--ink)}
+.tabs button+button{border-left:1px solid var(--line)}
+
+#info{max-width:520px;margin:0 auto var(--space-sm);font-size:14px;color:var(--sub);line-height:1.5}
+#info:empty{display:none}
+#info .ttl{font-size:18px;color:var(--ink)}
+#info .ttl .sub{font-family:var(--font-body);font-size:13px;color:var(--sub);margin-left:6px}
+#info .where{margin:4px 0;color:var(--ink)}
+#info .steps{list-style:none;margin:var(--space-sm) 0 var(--space-xs);padding:0;color:var(--ink)}
+#info .steps li{display:flex;align-items:center;gap:var(--space-sm);padding:3px 0}
+#info .steps li span{flex:1}
+#info .steps b{font-variant-numeric:tabular-nums;font-weight:400}
+#info .sw{display:inline-block;width:22px;height:0;border-top:3px dotted var(--path-go)}
+#info .sw.loop{border-top:3px solid var(--inju)}
+#info .sw.back{border-top-color:var(--path-back)}
+#info .meta{font-size:12px;color:var(--sub)}
+#info .cele{font-size:17px;color:var(--ink)}
+#info .cele small{display:block;font-family:var(--font-body);font-size:13px;color:var(--sub);margin-top:2px}
+#info .row button{min-height:42px;font-size:14px}
+details.mats{margin-top:var(--space-xs)}
+details.mats summary{cursor:pointer;color:var(--ink)}
+details.mats[open]{max-height:34vh;overflow:auto}
+.matrow{display:flex;justify-content:space-between;gap:var(--space-sm);padding:6px 0;border-bottom:1px solid var(--line);font-size:13px;text-align:left;width:100%;background:none;border-radius:0;min-height:0;border-left:0;border-right:0;border-top:0}
+.matrow small{color:var(--sub)}
+
+dialog{border:1px solid var(--line);border-radius:var(--radius-lg);background:var(--panel);color:var(--ink);width:min(92vw,420px);padding:var(--space-lg)}
+dialog::backdrop{background:oklch(27% 0.025 60 / .35)}
+dialog label{display:block;margin:var(--space-md) 0 var(--space-xs);font-size:14px}
+dialog input,dialog select{width:100%;min-height:44px;font:inherit;font-size:16px;border:1px solid var(--line);border-radius:var(--radius);padding:0 var(--space-md);background:var(--paper-2);color:var(--ink)}
+dialog p{font-size:13px;color:var(--sub);line-height:1.6}
+dialog a{color:var(--path-go)}
+details.adv{margin-top:var(--space-lg);border-top:1px solid var(--line);padding-top:var(--space-sm)}
+details.adv summary{cursor:pointer;font-size:14px;color:var(--ink-2)}
+
+/* 지도 위 */
 .night{filter:invert(1) hue-rotate(180deg) brightness(.45) contrast(.9)}
-.lbl{color:#c9d6ff;font-size:13px;white-space:nowrap;text-shadow:0 0 4px #000}
-.me{width:16px;height:16px;border-radius:50%;background:#2e86ab;border:3px solid #fff;box-shadow:0 0 0 2px rgba(46,134,171,.4)}
+.lbl{color:var(--star-line);font-family:var(--font-display);font-size:14px;white-space:nowrap;text-shadow:0 0 4px var(--sky)}
+.me{width:16px;height:16px;border-radius:50%;background:var(--path-go);border:3px solid var(--paper);box-shadow:0 0 0 2px oklch(50% 0.11 245 / .35)}
 /* 말풍선 핀 — 꼬리 끝이 그 지점 */
 .pinwrap{background:none;border:none}
 .pin{position:absolute;left:0;top:0;transform:translate(-50%,calc(-100% - 9px));display:inline-flex;align-items:center;gap:4px;white-space:nowrap;
-  background:#fff;color:#2b2f3a;border:2px solid var(--c);border-radius:999px;padding:2px 10px 2px 4px;font:700 12px system-ui,sans-serif;box-shadow:0 3px 8px rgba(0,0,0,.25)}
-.pin .e{font-size:20px;line-height:1.2}
+  background:var(--paper);color:var(--ink);border:2px solid var(--c);border-radius:999px;padding:2px 10px 2px 4px;font:13px var(--font-body)}
+.pin .e{font-size:19px;line-height:1.2}
 .pin::after{content:'';position:absolute;left:50%;bottom:-10px;transform:translateX(-50%);border:6px solid transparent;border-top:9px solid var(--c)}
 .pin.below{transform:translate(-50%,10px)} /* 아래로 여는 말풍선 — 위쪽의 도착 핀과 겹치지 않게 */
 .pin.below::after{bottom:auto;top:-15px;border-top-color:transparent;border-bottom:9px solid var(--c)}
-.pin.big{padding:4px 12px 4px 6px;font-size:13px;animation:bob 1.6s ease-in-out infinite}
-.pin.big .e{font-size:30px}
-@keyframes bob{0%,100%{transform:translate(-50%,calc(-100% - 9px))}50%{transform:translate(-50%,calc(-100% - 15px))}}
-@media (prefers-reduced-motion:reduce){.pin.big{animation:none}}
-/* 안내판 */
-#info .ttl{font-size:16px;font-weight:800;color:var(--ink)}
-#info .ttl .sub{font-size:13px;font-weight:600;color:var(--sub);margin-left:4px}
-#info .where{margin:4px 0;color:var(--ink)}
-#info .steps{margin:6px 0 4px;padding-left:20px;color:var(--ink)}
-#info .steps li{margin:2px 0}
-#info .steps b{float:right;font-weight:700}
-#info .sw{display:inline-block;width:18px;height:0;margin-right:6px;vertical-align:middle;border-top:4px dotted #2e86ab}
-#info .sw.loop{border-top:4px solid #ff6b6b}
-#info .sw.back{border-top-color:#7d8597}
-#info .meta{font-size:12px;color:var(--sub)}
+.pin.big{padding:4px 12px 4px 6px;font-family:var(--font-display);font-size:14px}
+.pin.big .e{font-size:28px}
+.pin.gold{background:var(--paper-2)}
+/* 단골집 도장: 둥근 인주 테두리 */
+.mpin{background:none;border:none}
+.mpin div{position:absolute;transform:translate(-50%,-50%);width:24px;height:24px;border-radius:50%;background:var(--paper);border:2px solid var(--inju);
+  display:flex;align-items:center;justify-content:center;font:12px var(--font-display);color:var(--inju)}
+.mpin.t3 div{width:30px;height:30px;font-size:13px;border-width:3px}
+.mpin.hi div{background:var(--inju);color:var(--on-inju)}
 /* 밤하늘 */
 .skyewrap{background:none;border:none}
-.skye{position:absolute;transform:translate(-50%,-150%);font-size:16px;filter:drop-shadow(0 0 4px rgba(255,243,176,.8))}
-.glow{filter:drop-shadow(0 0 6px #fff3b0)}
-#cPrev{display:block;margin:8px auto 0;background:var(--bg);border:1px solid var(--line);border-radius:12px}
-.gold .pin,.pin.gold{border-color:#f5c542;background:linear-gradient(135deg,#fff8d6,#ffe9a8)}
+.skye{position:absolute;transform:translate(-50%,-150%);font-size:15px}
+#cPrev{display:block;margin:var(--space-sm) auto 0;background:var(--paper-2);border:1px solid var(--line);border-radius:var(--radius)}
+
 /* 도감 */
 #dDex{width:min(96vw,520px);max-height:88vh;padding:0}
-#dDex .in{padding:14px 14px 0;overflow:auto;max-height:calc(88vh - 70px)}
-#dDex h3{margin:4px 0 2px}
-#dDex h4{margin:16px 0 6px;font-size:15px}
-.bar{height:8px;border-radius:99px;background:var(--line);overflow:hidden}
-.bar i{display:block;height:100%;background:linear-gradient(90deg,#ff6b6b,#f5a623)}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:8px}
-.card{border:1px solid var(--line);border-radius:14px;padding:8px 6px;text-align:center;background:var(--bg);position:relative}
-.card .e{font-size:30px;line-height:1.2}
-.card .n{font-size:13px;font-weight:700}
+#dDex .in{padding:var(--space-lg) var(--space-lg) 0;overflow:auto;max-height:calc(88vh - 70px)}
+#dDex h3{margin:0 0 var(--space-xs);font-size:22px}
+#dDex h4{margin:var(--space-xl) 0 var(--space-sm);font-size:16px}
+#dDex h4 small{font-family:var(--font-body);font-weight:400;font-size:12px;color:var(--sub);display:block;margin-top:2px}
+.bar{height:6px;border-radius:99px;background:var(--paper-3);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--inju)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:var(--space-sm)}
+.card{border:1px solid var(--line);border-radius:var(--radius);padding:var(--space-sm) 6px;text-align:center;background:var(--paper-2);position:relative;min-width:0}
+.card .e{font-size:28px;line-height:1.25}
+.card .n{font-size:13px;font-family:var(--font-display);overflow-wrap:anywhere}
 .card .m{font-size:11px;color:var(--sub)}
-.card.locked .e{filter:grayscale(1) brightness(.6);opacity:.35}
-.card.gold{border-color:#f5c542;box-shadow:0 0 0 2px rgba(245,197,66,.35) inset}
-.card .tag{position:absolute;top:4px;right:6px;font-size:12px}
-.card button{min-height:32px;font-size:12px;margin-top:6px;border-radius:9px}
-.ach{display:flex;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
-.ach .e{font-size:26px;width:34px;text-align:center}
-.ach.no .e{filter:grayscale(1);opacity:.4}
-.ach .t{flex:1;font-size:13px}.ach .t b{font-size:14px}
+.card.locked{background:var(--panel)}
+.card.locked .e{filter:grayscale(1);opacity:.3}
+.card.locked .n{color:var(--sub)}
+.card.gold{border-color:var(--gold)}
+.card .tag{position:absolute;top:4px;right:6px;font-size:11px;color:var(--gold)}
+.card button{min-height:32px;font-size:12px;margin-top:6px;width:100%}
+.ach{display:flex;gap:var(--space-md);align-items:center;padding:var(--space-sm) 0;border-bottom:1px solid var(--line)}
+.ach .e{font-size:22px;width:30px;text-align:center}
+.ach.no .e{filter:grayscale(1);opacity:.35}
+.ach .t{flex:1;font-size:13px}.ach .t b{font-family:var(--font-display);font-size:14px}
 .chips{display:flex;flex-wrap:wrap;gap:6px}
-.chip{border:1px solid var(--line);border-radius:99px;padding:4px 10px;font-size:13px;background:var(--bg)}
-#pad{display:block;margin:6px auto;touch-action:none;background:#fff;border:2px dashed var(--line);border-radius:14px}
-.foot{position:sticky;bottom:0;display:flex;background:var(--panel);padding:10px 14px;border-top:1px solid var(--line)}
-#info .cele{font-size:15px;font-weight:800}
-#info .cele small{display:block;font-weight:600;color:var(--sub);margin-top:2px}
-#info .row button{min-height:40px;font-size:14px}
-.mpin{background:none;border:none}
-.mpin div{position:absolute;transform:translate(-50%,-50%);width:26px;height:26px;border-radius:50%;background:#fff;border:2px solid #e07a5f;display:flex;align-items:center;justify-content:center;font-size:14px;box-shadow:0 1px 4px rgba(0,0,0,.3)}
-.mpin.t3 div{border-color:#f5c542;width:30px;height:30px;font-size:16px}
-.mat{display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px}
+.chip{border:1.5px solid var(--inju);color:var(--inju);border-radius:999px;padding:3px 10px;font-size:13px}
+.mat{display:flex;justify-content:space-between;gap:var(--space-sm);padding:6px 0;border-bottom:1px solid var(--line);font-size:13px}
 .mat small{color:var(--sub)}
+.note{font-size:11px;color:var(--sub);line-height:1.6;margin:var(--space-sm) 0 0}
+#pad{display:block;margin:var(--space-sm) auto;touch-action:none;background:var(--paper);border:1.5px dashed var(--rule);border-radius:var(--radius)}
+.foot{position:sticky;bottom:0;display:flex;background:var(--panel);padding:var(--space-md) var(--space-lg);border-top:1px solid var(--line)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
 <body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-loc" viewBox="0 0 24 24"><circle cx="12" cy="12" r="6"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></symbol>
+  <symbol id="i-walk" viewBox="0 0 24 24"><ellipse cx="8" cy="7" rx="2.6" ry="3.6"/><ellipse cx="16" cy="13" rx="2.6" ry="3.6"/><path d="M7 14l1.5 4M15 20l1-1.5"/></symbol>
+  <symbol id="i-stamp" viewBox="0 0 24 24"><path d="M9 3h6l-1 6h3a2 2 0 012 2v3H5v-3a2 2 0 012-2h3z"/><path d="M4 18h16v2H4z"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 019.5 4a7 7 0 1010.5 10.5z"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 5a2 2 0 012-2h13v16H6a2 2 0 00-2 2z"/><path d="M4 21V5M8 7h7"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1L7 17M17 7l2.1-2.1"/></symbol>
+</svg>
 <div id="map"></div>
-<div id="status">지도를 눌러 출발점을 정하거나, 「내 위치」를 누르세요. 출발점은 역·공원 같은 공공 장소를 권해요.</div>
+<div id="status" role="status"><span class="wordmark">동네 별자리</span>서울 골목을 걸으며 길 위에 모양을 그리면, 내 동네 밤하늘에 별이 하나 생겨요. 지도를 눌러 출발할 곳(역이나 공원)을 고르세요.</div>
 <div id="sheet">
   <div id="info"></div>
   <div class="row">
-    <button id="bLoc" class="sub">내 위치</button>
-    <button id="bPlan">원정 뽑기</button>
+    <button id="bLoc" class="icon" aria-label="내 위치에서 출발"><svg class="i"><use href="#i-loc"/></svg></button>
+    <button id="bPlan" class="primary">원정 뽑기</button>
   </div>
   <div class="row">
-    <button id="bWalk" class="sub" disabled>걷기 시작</button>
-    <button id="bDone" class="sub" disabled>다녀왔어요</button>
+    <button id="bWalk" disabled><svg class="i"><use href="#i-walk"/></svg>걷기 시작</button>
+    <button id="bDone" disabled><svg class="i"><use href="#i-stamp"/></svg>다녀왔어요</button>
   </div>
-  <div class="row">
-    <button id="bSky" class="sub">밤하늘</button>
-    <button id="bDex" class="sub">도감</button>
-    <button id="bGpx" class="sub" disabled>GPX</button>
-    <button id="bSet" class="sub">설정</button>
+  <div class="tabs">
+    <button id="bSky"><svg class="i"><use href="#i-moon"/></svg><span>밤하늘</span></button>
+    <button id="bDex"><svg class="i"><use href="#i-book"/></svg>도감</button>
+    <button id="bSet"><svg class="i"><use href="#i-gear"/></svg>설정</button>
   </div>
 </div>
 <dialog id="dSet">
   <form method="dialog">
-    <h3 style="margin:4px 0">설정</h3>
-    <label>무엇을 그릴까요</label>
-    <select id="sPick"><option value="all">전부 무작위 🎲</option><option value="geo">도형 ⭐💗🔺</option><option value="animal">동물 🐟🐱🐰🐳</option><option value="plant">식물 🌷🌸🌲🌵</option><option value="custom">내 도안 ✍️ (도감에서 고른 것)</option></select>
-    <p>「내 도안」은 도감에서 직접 그리거나 그림을 올려 만들어요. 동물·식물·내 도안은 알아볼 수 있게 지름을 600 m 이상으로 그려요.</p>
-    <label>공무원 맛집 경유</label>
-    <select id="sMat"><option value="off">상관없음</option><option value="on">맛집 근처를 도착지로 🍽️</option></select>
-    <label>반경(출발점에서 도착지까지)</label>
-    <select id="sRadius"><option value="1000">1 km</option><option value="1500">1.5 km</option><option value="2000" selected>2 km</option><option value="3000">3 km</option></select>
-    <label>모양 크기(지름)</label>
-    <select id="sSize"><option value="300">300 m</option><option value="400" selected>400 m</option><option value="600">600 m</option><option value="800">800 m</option></select>
-    <label>배경 지도</label>
-    <select id="sBase"><option value="osm">OpenStreetMap</option><option value="vw-Base">V-World 일반(국토교통부)</option><option value="vw-Satellite">V-World 위성</option><option value="vw-white">V-World 흰색</option></select>
-    <label>V-World 인증키</label>
-    <input id="sKey" autocomplete="off" placeholder="vworld.kr에서 발급한 키">
-    <p>V-World 키는 이 폰에만 저장돼요. 키를 발급할 때 등록한 서비스 주소에서만 지도가 열려요. 키가 없으면 OpenStreetMap을 써요.</p>
-    <label>기록</label>
-    <div class="row"><button type="button" id="bExport" class="sub">기록 내보내기</button><button type="button" id="bImport" class="sub">가져오기</button></div>
+    <h3 style="margin:0">설정</h3>
+    <label for="sPick">무엇을 그릴까요</label>
+    <select id="sPick"><option value="all">아무거나</option><option value="geo">도형(별·하트·세모…)</option><option value="animal">동물(물고기·고양이·토끼·고래)</option><option value="plant">식물(잎·나무·튤립·꽃·선인장)</option><option value="custom">내 도안(도감에서 고른 것)</option></select>
+    <label for="sRadius">얼마나 멀리</label>
+    <select id="sRadius"><option value="1000">가볍게 · 반경 1 km (왕복 3~4 km쯤)</option><option value="1500">조금 더 · 1.5 km</option><option value="2000">멀리 · 2 km (왕복 5~6 km쯤)</option><option value="3000">아주 멀리 · 3 km</option></select>
+    <label for="sSize">모양 크기</label>
+    <select id="sSize"><option value="300">작게 · 300 m</option><option value="400">보통 · 400 m</option><option value="600">크게 · 600 m</option><option value="800">아주 크게 · 800 m</option></select>
+    <p>동물·식물·내 도안은 알아볼 수 있게 600 m 이상으로 그려요. 크게 그릴수록 길 위 모양이 더 닮아요.</p>
+    <div id="matSet" hidden>
+      <label for="sMat">시청 단골집 들르기</label>
+      <select id="sMat"><option value="off">상관없음</option><option value="on">단골집 근처를 도착지로</option></select>
+    </div>
+    <label>내 기록은 어디에</label>
+    <p>걸은 길·별·도안은 이 폰의 브라우저에만 저장돼요. 서버로 보내지 않아요. 다만 지도 그림은 OpenStreetMap(또는 V-World)에서, 도착지 이름은 OpenStreetMap에서 받아 오므로 그곳은 지금 보는 지역을 알 수 있어요. 브라우저 기록을 지우면 별도 사라지니 가끔 내보내 두세요.</p>
+    <div class="row"><button type="button" id="bExport">기록 내보내기</button><button type="button" id="bImport">가져오기</button></div>
+    <p>내보낸 파일에는 걸은 길이 들어 있어요. 남에게 보내지 마세요.</p>
     <input type="file" id="fImport" accept="application/json" hidden>
-    <div class="row" style="margin-top:14px"><button value="ok">닫기</button></div>
+    <details class="adv">
+      <summary>고급</summary>
+      <label for="sBase">배경 지도</label>
+      <select id="sBase"><option value="osm">OpenStreetMap</option><option value="vw-Base">V-World 일반(국토교통부)</option><option value="vw-Satellite">V-World 위성</option><option value="vw-white">V-World 흰색</option></select>
+      <label for="sKey">V-World 인증키</label>
+      <input id="sKey" autocomplete="off" placeholder="vworld.kr에서 발급한 키">
+      <p>키는 이 폰에만 저장돼요. 키를 발급할 때 등록한 주소에서만 지도가 열려요.</p>
+      <label>원정 경로 파일</label>
+      <div class="row"><button type="button" id="bGpx" disabled>GPX로 저장</button></div>
+      <p>다른 지도 앱에서 길 안내를 받을 때 써요. 출발점이 들어 있으니 남에게 보내지 마세요.</p>
+    </details>
+    <p class="note">개인이 취미로 만든 앱이에요. 어떤 단체의 입장과도 관계없어요. 지도 © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap 기여자</a></p>
+    <div class="row" style="margin-top:var(--space-lg)"><button value="ok" class="primary">닫기</button></div>
   </form>
 </dialog>
 <dialog id="dDex">
   <div class="in">
     <h3>도감</h3>
     <div id="dexSum"></div>
-    <h4>모양 도감</h4>
+    <h4>모양</h4>
     <div class="grid" id="dexBase"></div>
-    <h4>내 도안 <span style="font-weight:500;font-size:12px;color:var(--sub)">— 직접 만든 모양으로 걸으면 도감에 내 칸이 생겨요</span></h4>
-    <div class="row"><button type="button" id="bDraw">✍️ 손으로 그리기</button><button type="button" id="bUpload" class="sub">🖼️ 그림 올리기</button></div>
+    <h4>내 도안<small>직접 만든 모양으로 걸으면 도감에 내 칸이 생겨요</small></h4>
+    <div class="row"><button type="button" id="bDraw" class="primary">손으로 그리기</button><button type="button" id="bUpload">그림 올리기</button></div>
     <input type="file" id="fImg" accept="image/*" hidden>
     <p id="customName" style="font-size:13px;color:var(--sub)"></p>
-    <div class="grid" id="dexMine" style="margin-top:8px"></div>
+    <div class="grid" id="dexMine" style="margin-top:var(--space-sm)"></div>
     <h4>업적</h4>
     <div id="achList"></div>
-    <h4>공무원 맛집 도장 <span style="font-weight:500;font-size:12px;color:var(--sub)">— 원정 길 60 m 안에서 지나간 곳</span></h4>
-    <div id="matList"></div>
-    <p style="font-size:11px;color:var(--sub);margin:6px 0 0">자료: 서울특별시 본청 업무추진비 목록(서울 열린데이터광장, 공공누리 제1유형). 6번 이상 간 가게만, 가게 이름·주소·횟수만 씁니다. 👑 30번↑ · 🥇 12번↑ · 🍽️ 6번↑</p>
-    <h4>동네 스탬프</h4>
+    <div id="matDex" hidden>
+      <h4>시청 단골집 도장<small>원정 길 60 m 안에서 지나간 곳</small></h4>
+      <div id="matList"></div>
+      <p class="note">서울시청 본청이 업무추진비로 6건 넘게 결제한 가게예요. 맛을 보증하지 않아요. 표시는 결제 건수 기준 상위 5 %·20 %·그 밖으로 나눴어요.<br>자료: <a href="https://data.seoul.go.kr/dataList/OA-22156/S/1/datasetView.do" target="_blank" rel="noopener">서울특별시 본청 업무추진비 목록</a>(서울 열린데이터광장) · 공공누리 제1유형(출처표시) · 가게 이름·주소·결제 건수만 뽑아 가공함</p>
+    </div>
+    <h4>동네 도장</h4>
     <div class="chips" id="stampList"></div>
-    <div style="height:12px"></div>
+    <div style="height:var(--space-md)"></div>
   </div>
-  <div class="foot"><button type="button" id="bDexClose">닫기</button></div>
+  <div class="foot"><button type="button" id="bDexClose" class="primary">닫기</button></div>
 </dialog>
 <dialog id="dMake">
-  <h3 style="margin:4px 0">✍️ 내 도안 그리기</h3>
-  <p style="font-size:13px;color:var(--sub);margin:4px 0">한 번에 이어서 그리세요. 손을 떼면 끝점이 첫 점으로 이어져 닫혀요. 굵직한 모양일수록 길 위에서 잘 보여요.</p>
+  <h3 style="margin:0">내 도안 그리기</h3>
+  <p style="margin:var(--space-xs) 0">한 번에 이어서 그리세요. 손을 떼면 끝점이 첫 점과 이어져요. 굵직한 모양일수록 길 위에서 잘 보여요.</p>
   <canvas id="pad" width="300" height="300"></canvas>
-  <label style="font-size:14px">도안 이름</label>
-  <input id="mName" maxlength="20" placeholder="예: 우리 집 강아지" style="width:100%;min-height:44px;font-size:16px;border:1px solid var(--line);border-radius:10px;padding:0 10px;background:var(--bg);color:var(--ink)">
-  <p id="mMsg" style="font-size:13px;color:var(--sub);min-height:18px"></p>
-  <div class="row"><button type="button" id="mClear" class="sub">지우기</button><button type="button" id="mSave">도안 저장</button></div>
-  <div class="row"><button type="button" id="mClose" class="sub">닫기</button></div>
+  <label for="mName" style="font-size:14px">도안 이름</label>
+  <input id="mName" maxlength="20" placeholder="예: 우리 집 강아지">
+  <p id="mMsg" style="min-height:18px"></p>
+  <div class="row"><button type="button" id="mClear">지우기</button><button type="button" id="mSave" class="primary">도안 저장</button></div>
+  <div class="row"><button type="button" id="mClose">닫기</button></div>
 </dialog>
 <script type="module" src="app.js"></script>
 </body>

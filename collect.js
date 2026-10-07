@@ -24,7 +24,7 @@ export function stamps(S) {
   return [...m.entries()].map(([dong, n]) => ({ dong, n })).sort((a, b) => b.n - a.n || a.dong.localeCompare(b.dong));
 }
 
-// 공무원 맛집 도장 — 원정 길 60 m 안에서 지나간 가게(별 기록의 mats)
+// 시청 단골집 도장: 원정 길 60 m 안에서 지나간 가게(별 기록의 mats)
 export function matStamps(S) {
   const m = new Map();
   for (const s of S) for (const x of s.mats || []) { const e = m.get(x.k) || { ...x, times: 0 }; e.times++; m.set(x.k, e); }
@@ -39,7 +39,7 @@ const RULES = [
   ['first', '⭐', '첫 별', '원정을 한 번 다녀오기', S => Math.min(1, S.length)],
   ['const1', '🌌', '첫 별자리', '별 5개 모으기', S => Math.min(1, S.length / 5)],
   ['const3', '🪐', '별자리 셋', '별 15개 모으기', S => Math.min(1, S.length / 15)],
-  ['bright', '💎', '1등성', '모양을 아주 정확히 그려 1등성 받기', S => S.some(s => s.grade === 1) ? 1 : 0],
+  ['bright', '💎', '1등성', '그린 길을 90% 넘게 따라 걸어 1등성 받기', S => S.some(s => s.grade === 1) ? 1 : 0],
   ['gold', '✨', '반짝 별', '반짝 원정을 다녀오기', S => S.some(s => s.gold) ? 1 : 0],
   ['km10', '👟', '10 km', '원정으로 모두 10 km 걷기', S => Math.min(1, sum(S, 'totalKm') / 10)],
   ['km50', '🥾', '50 km', '원정으로 모두 50 km 걷기', S => Math.min(1, sum(S, 'totalKm') / 50)],
@@ -49,10 +49,10 @@ const RULES = [
   ['plant', '🌿', '정원사', '식물 5종 모두 그리기', S => has(S, CATEGORY.plant) / CATEGORY.plant.length],
   ['maker', '🎨', '첫 작품', '내 도안으로 원정 다녀오기', S => Math.min(1, designsWalked(S))],
   ['maker3', '🖌️', '동네 화가', '내 도안 3개로 원정 다녀오기', S => Math.min(1, designsWalked(S) / 3)],
-  ['dong5', '📮', '동네 마당발', '동네 스탬프 5곳', S => Math.min(1, stamps(S).length / 5)],
-  ['mat1', '🍽️', '공무원 맛집', '원정 길에 공무원 맛집 지나가기', S => Math.min(1, matStamps(S).length)],
-  ['mat10', '🥢', '맛집 탐방가', '공무원 맛집 도장 10곳', S => Math.min(1, matStamps(S).length / 10)],
-  ['matTop', '👑', '전설의 맛집', '30번 넘게 간 공무원 맛집 지나가기', S => matStamps(S).some(m => m.t === 3) ? 1 : 0],
+  ['dong5', '📮', '동네 마당발', '동네 도장 5곳', S => Math.min(1, stamps(S).length / 5)],
+  ['mat1', '🍽️', '시청 단골집', '원정 길에 시청 단골집 지나가기', S => Math.min(1, matStamps(S).length)],
+  ['mat10', '🥢', '단골집 탐방', '시청 단골집 도장 10곳', S => Math.min(1, matStamps(S).length / 10)],
+  ['matTop', '👑', '최고 단골집', '결제 건수 상위 5%인 단골집 지나가기', S => matStamps(S).some(m => m.t === 3) ? 1 : 0],
 ];
 
 export function achievements(S) {
