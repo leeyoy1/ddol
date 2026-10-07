@@ -20,15 +20,19 @@ async function tile(k) {
   return v;
 }
 
-// params: { lat, lon, radius, size, pick, custom, nearLL, seed }
-export async function runPlan({ lat, lon, radius, size, pick, custom, nearLL, seed }) {
+// params: { lat, lon, endLat?, endLon?, radius, size, pick, custom, nearLL, seed, maxTotalKm? }
+// 도착점이 있으면 두 점의 가운데를 중심으로, 두 점이 다 들어가게 조각을 받는다(10-08 실측: 2.5 km면 조각 4→9개, 내려받기 2~2.5배)
+export async function runPlan({ lat, lon, endLat = null, endLon = null, radius, size, pick, custom, nearLL, seed, maxTotalKm = null }, onProgress) {
   INDEX = INDEX || await getJson('tiles/index.json');
-  const reach = radius + Math.max(size, C.FIGURE_MIN_SIZE);
-  const keys = C.tileKeysAround(INDEX, lat, lon, reach);
+  const hasEnd = endLat != null;
+  const proj = new C.Proj(hasEnd ? (lat + endLat) / 2 : lat, hasEnd ? (lon + endLon) / 2 : lon);
+  const start = proj.xy(lat, lon), end = hasEnd ? proj.xy(endLat, endLon) : null;
+  const reach = (end ? Math.hypot(start[0] - end[0], start[1] - end[1]) / 2 : 0) + radius + Math.max(size, C.FIGURE_MIN_SIZE);
+  const keys = C.tileKeysAround(INDEX, proj.lat0, proj.lon0, reach);
   if (!keys.length) throw new Error('아직 서울에서만 돼요. 서울 안을 골라 주세요.');
-  const tiles = await Promise.all(keys.map(tile));
-  const proj = new C.Proj(lat, lon);
+  let got = 0;
+  const tiles = await Promise.all(keys.map(k => tile(k).then(t => { onProgress && onProgress(++got, keys.length); return t; })));
   const G = C.buildGraph(tiles, proj, reach, INDEX.hw_names);
-  const near = nearLL ? nearLL.map(([a, b]) => proj.xy(a, b)).filter(([x, y]) => Math.hypot(x, y) <= radius * 1.1) : null;
-  return C.plan(G, proj, [0, 0], radius, size, seed, { pick, custom, near });
+  const near = nearLL ? nearLL.map(([a, b]) => proj.xy(a, b)).filter(([x, y]) => Math.hypot(x - start[0], y - start[1]) <= radius * 1.1) : null;
+  return C.plan(G, proj, start, radius, size, seed, { pick, custom, near, end, maxTotalKm });
 }

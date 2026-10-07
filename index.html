@@ -80,11 +80,16 @@ svg.i{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-widt
 #sheet.folded #fold{align-items:center}
 #sheet.folded #fold em{display:inline}
 .seg{margin-bottom:var(--space-sm)}
-.seg button{min-height:36px;font-size:13px;font-weight:400;color:var(--ink-2)}
+.seg button{min-height:36px;padding-inline:4px;font-size:13px;font-weight:400;color:var(--ink-2)}
 .seg button[aria-pressed="true"]{border-color:var(--navy);color:var(--navy);font-weight:700;background:var(--paper-2)}
-#sheet.folded .seg{display:none}
+@media (max-width:359px){.seg button{font-size:12px;letter-spacing:-0.02em}} /* 320 px에서 눌린 칸(굵게)이 넘치지 않게 */
+#sheet.folded .seg,#sheet.folded .unit{display:none}
+.unit{justify-content:flex-end;margin-bottom:2px}
+button.link{flex:none;min-height:24px;border:0;background:none;padding:0 2px;font-size:12px;font-weight:400;color:var(--ink-2);text-decoration:underline;text-underline-offset:2px}
+#info .meta input[type=time]{font:inherit;font-size:13px;border:1px solid var(--line);border-radius:var(--radius);padding:1px 4px;background:var(--paper);color:var(--ink)}
+.pin.far{border-style:dashed;opacity:.8}
 /* 밤하늘에서는 산책 단추를 숨기고 꼬리표만 */
-:root[data-theme="dark"] #sheet .seg,:root[data-theme="dark"] #sheet .r1,:root[data-theme="dark"] #sheet .r2{display:none}
+:root[data-theme="dark"] #sheet .seg,:root[data-theme="dark"] #sheet .unit,:root[data-theme="dark"] #sheet .r1,:root[data-theme="dark"] #sheet .r2{display:none}
 button.walking{border-color:var(--accent);color:var(--accent)}
 #fold:hover{background:transparent}
 #sheet.folded #info,#sheet.folded .r2,#sheet.folded .tabs{display:none}
@@ -219,6 +224,7 @@ details.adv summary{cursor:pointer;font-size:14px;color:var(--ink-2)}
 <div id="sheet">
   <button id="fold" aria-expanded="true" aria-label="메뉴 접기"><span></span><em>메뉴 펼치기</em></button>
   <div id="info"></div>
+  <div class="row unit"><button type="button" id="bUnit" class="link">분으로 보기</button></div>
   <div class="row seg" id="lenRow" role="group" aria-label="얼마나 걸을까요">
     <button data-len="short" aria-pressed="false">짧게 · 2~3.5 km</button><button data-len="mid" aria-pressed="false">보통 · 4.5~6 km</button><button data-len="long" aria-pressed="false">길게 · 6 km 이상</button>
   </div>
@@ -242,18 +248,20 @@ details.adv summary{cursor:pointer;font-size:14px;color:var(--ink-2)}
     <label for="sPick">무엇을 그릴까요</label>
     <select id="sPick"><option value="all">아무거나</option><option value="geo">도형(별·하트·세모…)</option><option value="animal">동물(물고기·고양이·토끼·고래)</option><option value="plant">식물(잎·나무·튤립·꽃·선인장)</option><option value="custom">내 도안(도감에서 고른 것)</option></select>
     <label for="sRadius">얼마나 멀리</label>
-    <select id="sRadius"><option value="500">가까이 · 반경 500 m</option><option value="1000">가볍게 · 반경 1 km (왕복 3~4 km쯤)</option><option value="1500">조금 더 · 1.5 km</option><option value="2000">멀리 · 2 km (왕복 5~6 km쯤)</option><option value="3000">아주 멀리 · 3 km</option></select>
+    <select id="sRadius"><option value="250">아주 가까이 · 250 m</option><option value="350">가까이 · 350 m</option><option value="500">가까이 · 반경 500 m</option><option value="1000">가볍게 · 반경 1 km (왕복 3~4 km쯤)</option><option value="1500">조금 더 · 1.5 km</option><option value="2000">멀리 · 2 km (왕복 5~6 km쯤)</option><option value="3000">아주 멀리 · 3 km</option></select>
     <label for="sSize">모양 크기</label>
-    <select id="sSize"><option value="300">작게 · 300 m</option><option value="400">보통 · 400 m</option><option value="600">크게 · 600 m</option><option value="800">아주 크게 · 800 m</option></select>
+    <select id="sSize"><option value="150">아주 작게 · 150 m</option><option value="200">더 작게 · 200 m</option><option value="300">작게 · 300 m</option><option value="400">보통 · 400 m</option><option value="600">크게 · 600 m</option><option value="800">아주 크게 · 800 m</option></select>
     <p>동물·식물·내 도안은 알아볼 수 있게 600 m 이상으로 그려요. 크게 그릴수록 길 위 모양이 더 닮아요.</p>
     <div id="matSet" hidden>
       <label for="sMat">시청 단골집 들르기</label>
       <select id="sMat"><option value="off">상관없음</option><option value="on">단골집 근처를 도착지로</option></select>
     </div>
+    <label for="sVib">돌아갈 시각 진동(분으로 볼 때)</label>
+    <select id="sVib"><option value="on">켬</option><option value="off">끔</option></select>
     <label>내 기록은 어디에</label>
     <p>걸은 길·별·도안은 이 폰의 브라우저에만 저장돼요. 서버로 보내지 않아요. 다만 지도 그림은 OpenStreetMap(또는 V-World)에서, 도착지 이름은 OpenStreetMap에서 받아 오므로 그곳은 지금 보는 지역을 알 수 있어요. 브라우저 기록을 지우면 별도 사라지니 가끔 내보내 두세요.</p>
     <div class="row"><button type="button" id="bExport">기록 내보내기</button><button type="button" id="bImport">가져오기</button></div>
-    <p>내보낸 파일에는 걸은 길이 들어 있어요. 남에게 보내지 마세요.</p>
+    <p>내보낸 파일에는 산책한 자리(좌표)와 걸은 길이 들어 있어요. 폰을 옮길 때만 쓰고 남에게 보내지 마세요.</p>
     <input type="file" id="fImport" accept="application/json" hidden>
     <details class="adv">
       <summary>고급</summary>

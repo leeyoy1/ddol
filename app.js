@@ -61,19 +61,41 @@ const pin = (ll, e, text, color, cls = '') => L.marker(ll, {
 });
 
 const planLayer = L.layerGroup().addTo(map), skyLayer = L.layerGroup(), meLayer = L.layerGroup().addTo(map);
-let start = null, startMarker = null, plan = store.get('plan', null), watchId = null;
+let start = null, startMarker = null, end = null, endMarker = null, plan = store.get('plan', null), watchId = null, warned = false;
 if (plan && !plan.goLL) plan = null; // 10-07 첫 판 산책은 모양 길(loopLL)이 없어 걸어도 별이 될 수 없다 — 버린다
 
 function setStart(lat, lon, why) {
   start = [lat, lon];
   if (startMarker) map.removeLayer(startMarker);
-  startMarker = pin(start, '🚩', '출발', 'var(--path-go)').addTo(map);
-  status(`${why} 출발할게요. 「산책 뽑기」를 눌러 보세요.`);
+  startMarker = pin(start, '🚩', '출발', 'var(--path-go)').addTo(map)
+    .on('click', () => { if (plan) return; map.removeLayer(startMarker); start = startMarker = null; clearEnd(); status('출발점을 지웠어요. 지도를 눌러 다시 골라 주세요.'); });
+  status(`${why} 출발해요. 끝낼 곳이 따로 있으면 지도를 한 번 더 누르세요. 없으면 「산책 뽑기」.`);
+}
+// 끝에서 시작: 출발 다음에 누른 곳에서 산책이 끝난다(편도). 핀을 다시 누르면 지우고 왕복으로
+const END_MAX_M = 2500; // 두 점 거리 상한 — 폰 실측 전 보수값(제안서 결정 2, 10-08 measure_end: 내려받기 2~2.5배)
+let TILE_INDEX = null;
+const inSeoul = async (lat, lon) => {
+  try { TILE_INDEX = TILE_INDEX || await (await fetch('tiles/index.json')).json(); } catch { return true; } // 못 받으면 계산 쪽에서 다시 거른다
+  return C.tileKeysAround(TILE_INDEX, lat, lon, 1).length > 0;
+};
+function clearEnd() { if (endMarker) map.removeLayer(endMarker); end = endMarker = null; }
+async function setEnd(lat, lon) {
+  if (!(await inSeoul(lat, lon))) return status('서울 안에서만 고를 수 있어요.');
+  clearEnd();
+  const d = map.distance(start, [lat, lon]);
+  if (d < +store.get('radius', 1000) / 2) return status('출발점과 너무 가까워서 한 바퀴 돌아 출발점으로 돌아와요.');
+  end = [lat, lon];
+  const far = d > END_MAX_M;
+  endMarker = pin(end, '', far ? '너무 멀어요' : '여기서 끝', 'var(--path-back)', far ? 'below far' : 'below').addTo(map)
+    .on('click', () => { clearEnd(); status('끝낼 곳을 지웠어요. 출발점으로 돌아오는 산책이에요.'); });
+  endMarker.getElement()?.setAttribute('aria-label', '여기서 끝 — 누르면 지우기');
+  status(far ? '거기까지는 걸어가기엔 멀어요. 조금 더 가까운 곳을 눌러 주세요.' : '찍은 곳에서 끝나는 산책이에요. 「산책 뽑기」를 누르세요.');
 }
 map.on('click', e => {
   if (mode !== 'plan' || watchId != null) return;
-  if (plan) return status('지금 산책이 있어요. 새로 뽑으려면 「산책 뽑기」를 다시 누르세요.'); // 산책 중에 출발 핀만 옮겨지면 헷갈린다
-  setStart(e.latlng.lat, e.latlng.lng, '여기서');
+  if (plan) return status('지금 산책이 있어요. 새로 뽑으려면 「산책 뽑기」를 다시 누르세요. 새로 뽑으면 지금까지 걸은 길은 지워져요.'); // 산책 중에 핀만 옮겨지면 헷갈린다
+  if (!start) return setStart(e.latlng.lat, e.latlng.lng, '여기서');
+  setEnd(e.latlng.lat, e.latlng.lng);
 });
 
 $('bLoc').onclick = () => {
@@ -88,19 +110,20 @@ $('bLoc').onclick = () => {
 // ---------- 산책 계산: 작업자에서(화면이 굳지 않게). 작업자를 못 쓰는 브라우저는 화면 쪽에서 같은 코드로 ----------
 let worker = null;
 try { worker = new Worker('plan_worker.js', { type: 'module' }); } catch { worker = null; }
+const onTiles = (n, total) => { if (total > 4) status(`길을 받는 중이에요 (${n}/${total})`); }; // 편도는 조각이 9개까지 — 오래 걸리면 고장으로 보인다
 function planAsync(params) {
-  if (!worker) return import('./plan_job.js').then(m => m.runPlan(params));
+  if (!worker) return import('./plan_job.js').then(m => m.runPlan(params, onTiles));
   return new Promise((ok, bad) => {
-    worker.onmessage = e => e.data.ok ? ok(e.data.plan) : bad(new Error(e.data.msg));
-    worker.onerror = () => { worker = null; import('./plan_job.js').then(m => m.runPlan(params)).then(ok, bad); };
+    worker.onmessage = e => e.data.progress ? onTiles(...e.data.progress) : e.data.ok ? ok(e.data.plan) : bad(new Error(e.data.msg));
+    worker.onerror = () => { worker = null; import('./plan_job.js').then(m => m.runPlan(params, onTiles)).then(ok, bad); };
     worker.postMessage(params);
   });
 }
 
 // 도착지 근처 이름(OpenStreetMap 역지오코딩) — 도착지 좌표만 보낸다. 실패하면 이름 없이 간다
-async function placeName(ll) {
+async function placeName(ll, zoom = 18) {
   try {
-    const u = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=18&accept-language=ko&lat=${ll[0]}&lon=${ll[1]}`;
+    const u = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=${zoom}&accept-language=ko&lat=${ll[0]}&lon=${ll[1]}`;
     const r = await fetch(u);
     if (!r.ok) return { label: null, dong: null, failed: true };
     const j = await r.json(), a = j.address || {};
@@ -153,6 +176,7 @@ function drawPlan(p) {
   L.polyline(p.backLL, { color: T('--path-back'), weight: 4, opacity: .7, dashArray: '1 9', lineCap: 'round' }).addTo(planLayer);
   L.polyline(p.loopLL, { color: T('--accent'), weight: 6, opacity: .9 }).addTo(planLayer);
   pin(p.loopStart, '✏️', '여기서 그리기 시작', 'var(--accent)', 'below').addTo(planLayer);
+  if (p.oneWay) pin(p.backLL[p.backLL.length - 1], '', '여기서 끝', 'var(--path-back)', 'below').addTo(planLayer);
   // 도착 핀은 모양 위쪽 가장자리에 — 가운데에 두면 그릴 모양을 덮는다
   const topLat = Math.max(...p.tgtLL.map(q => q[0])), midLon = p.tgtLL.reduce((s, q) => s + q[1], 0) / p.tgtLL.length;
   pin([topLat, midLon], emoji(p.shape), `${p.gold ? '반짝 ' : ''}${shapeName(p)} 그리는 곳`, p.gold ? 'var(--gold)' : 'var(--navy)', p.gold ? 'big gold' : 'big').addTo(planLayer);
@@ -165,10 +189,11 @@ function drawPlan(p) {
        <ol class="steps">
          <li><i class="sw go"></i><span>✏️까지 가기</span><b>${p.goKm} km</b></li>
          <li><i class="sw loop"></i><span>${n} 그리며 한 바퀴(${p.turn} 방향)</span><b>${p.loopKm} km</b></li>
-         <li><i class="sw back"></i><span>출발점으로 돌아오기</span><b>${p.backKm} km</b></li>
+         <li><i class="sw back"></i><span>${p.oneWay ? `<span id="endPlace">${esc(p.endPlace || '찍은 곳')}</span>까지 가기` : '출발점으로 돌아오기'}</span><b>${p.backKm} km</b></li>
        </ol>
        ${matListHtml(p)}
-       <div class="meta">모두 ${p.totalKm} km${p.likeness ? ` · 길이 모양을 닮은 정도 ${stars5(p.likeness)}(별이 많을수록 또렷해요)` : ''} · 모양 길(파란 실선)의 60%를 지나면 별이 돼요</div>`;
+       <div class="meta">모두 ${p.totalKm} km${p.oneWay ? ` · 그리기 ${(p.goKm + p.loopKm).toFixed(1)} km` : ''}${p.minutes ? ` · ${p.minutes}분쯤 · 도형만 그려요` : ''}${p.likeness ? ` · 길이 모양을 닮은 정도 ${stars5(p.likeness)}(별이 많을수록 또렷해요)` : ''} · 모양 길(파란 실선)의 60%를 지나면 별이 돼요</div>${p.backBy ? `
+       <div class="meta"><label>돌아갈 시각 <input type="time" id="backBy" value="${esc(p.backBy)}"></label> · 앱을 켜 둔 동안 상태줄로 알려드려요</div>` : ''}`;
   $('bWalk').disabled = $('bGpx').disabled = false;
   $('bDone').disabled = !(store.get('track', null)?.id === p.id);
   // 가게를 누르면 목록을 접고(지도를 가리지 않게) 그 가게로 간다
@@ -178,7 +203,13 @@ function drawPlan(p) {
     map.once('moveend', () => matMarkers.get(m.k)?.openTooltip());
     map.flyTo(m.ll, 17, { duration: 0.6 });
   };
+  if ($('backBy')) $('backBy').onchange = e => { if (/^\d\d:\d\d$/.test(e.target.value)) { p.backBy = e.target.value; warned = false; store.set('plan', p); } };
   fit(L.polyline(p.fullLL).getBounds()); // 안내판을 채운 뒤 높이를 재서 맞춘다
+  if (p.oneWay && !p.endPlace) placeName(p.backLL[p.backLL.length - 1].map(v => +v.toFixed(3)), 14).then(({ label, dong }) => {
+    if (plan !== p || !(dong || label)) return;
+    p.endPlace = dong || label; store.set('plan', p);
+    const el = $('endPlace'); if (el) el.textContent = p.endPlace;
+  });
   if (!p.place) placeName(p.center).then(({ label, dong, failed }) => {
     if (plan !== p) return;
     if (failed) { const el = $('place'); if (el) el.textContent = '이름은 다음에 다시 찾아볼게요'; return; } // 저장하지 않으면 다음에 다시 부른다
@@ -188,7 +219,8 @@ function drawPlan(p) {
 }
 
 $('bPlan').onclick = async () => {
-  if (plan && !confirm('지금 산책을 버리고 새로 뽑을까요?')) return; // 출발점을 옮기기 전에 묻는다
+  if (end && map.distance(start, end) > END_MAX_M) return status('끝낼 곳이 걸어가기엔 멀어요. 조금 더 가까운 곳을 눌러 주세요.');
+  if (plan && !confirm('지금 산책을 버리고 새로 뽑을까요? 지금까지 걸은 길은 지워져요.')) return; // 출발점을 옮기기 전에 묻는다
   $('bPlan').disabled = true; // 위치를 기다리는 동안에도 두 번 눌리지 않게
   try {
     if (!start) { // 지도를 안 눌렀으면 지금 자리에서(위치를 못 받으면 지도 가운데에서) — 첫 화면에서 「무엇부터 누르나」가 갈리지 않게(10-08 가상 테스트 5/5)
@@ -203,13 +235,17 @@ $('bPlan').onclick = async () => {
     status('동네 길을 불러오는 중…');
     const d = activeDesign(), mats = await loadMat();
     status('어디로 갈지 고르는 중…');
-    plan = await planAsync({ lat: start[0], lon: start[1], radius, size, pick, seed: Math.floor(Math.random() * 1e6),
+    const L0 = lens()[curLen()], minutes = store.get('unit', 'km') === 'min' && L0 ? L0.min : null;
+    plan = await planAsync({ lat: start[0], lon: start[1], endLat: end ? end[0] : null, endLon: end ? end[1] : null,
+      maxTotalKm: minutes ? minutes * WALK_M_PER_MIN / 1000 * 1.2 : null, radius, size, pick, seed: Math.floor(Math.random() * 1e6),
       custom: d && { id: d.id, name: d.name, pts: d.pts },
       nearLL: store.get('matRoute', 'off') === 'on' && mats ? mats.map(m => m.ll) : null });
     plan.mats = matsOnRoute(plan.fullLL);
+    if (minutes) { plan.minutes = minutes; plan.backBy = defaultBackBy(minutes); }
+    warned = false; clearEnd(); // 끝 핀은 이제 산책 그림(planLayer)에 그린다
     store.set('plan', plan); store.set('track', null);
     drawPlan(plan);
-    status(`${plan.gold ? '반짝 산책이에요. ' : ''}파란 점선을 따라 ✏️까지 가서, 파란 실선을 따라 ${shapeName(plan)}${eulReul(shapeName(plan))} 그리고 돌아오세요. 출발할 때 「걷기 시작」을 눌러 주세요.`);
+    status(`${plan.gold ? '반짝 산책이에요. ' : ''}파란 점선을 따라 ✏️까지 가서, 파란 실선을 따라 ${shapeName(plan)}${eulReul(shapeName(plan))} 그리고 ${plan.oneWay ? '회색 점선을 따라 끝낼 곳까지 가세요' : '돌아오세요'}. 출발할 때 「걷기 시작」을 눌러 주세요.`);
   } catch (e) { status(e.message); } finally { $('bPlan').disabled = mode !== 'plan'; }
 };
 
@@ -244,7 +280,13 @@ $('bWalk').onclick = () => {
     const ll = [p.coords.latitude, p.coords.longitude], tr = addPoint(ll);
     line.addLatLng(ll); me.setLatLng(ll).addTo(meLayer);
     $('bDone').disabled = false;
-    status(`걷는 중 · ${trackKm(tr.pts).toFixed(2)} km · 모양 길의 ${Math.round(C.coverage(plan.loopLL, tr.pts) * 100)}%를 지났어요`);
+    const cov = Math.round(C.coverage(plan.loopLL, tr.pts) * 100);
+    if (!plan.backBy) return status(`걷는 중 · ${trackKm(tr.pts).toFixed(2)} km · 모양 길의 ${cov}%를 지났어요`);
+    // 돌아갈 시각: 남은 분 ≤ 지금 자리→끝 곳 직선거리×1.3을 걷는 분이면 알린다(서버가 없어 앱을 켜 둔 동안만)
+    const left = minutesUntil(plan.backBy), need = map.distance(ll, plan.backLL[plan.backLL.length - 1]) * 1.3 / WALK_M_PER_MIN;
+    if (left > need) return status(`걷는 중 · 모양 길 ${cov}% · ${plan.backBy}까지 ${Math.round(left)}분`);
+    if (!warned) { warned = true; if (store.get('vib', 'on') === 'on' && navigator.vibrate) navigator.vibrate(200); }
+    status(left > 0 ? `지금 돌아가면 ${plan.backBy}에 맞춰요 · 모양 길 ${cov}%` : `${plan.backBy}이 지났어요 · 모양 길 ${cov}%`);
   }, err => { if (err.code === 1) { stopWalk(); status('위치 권한이 꺼져 있어요. 브라우저 설정에서 켜 주세요.'); } else status('위치를 받지 못하고 있어요. 하늘이 트인 곳으로 가 보세요.'); }, { enableHighAccuracy: true });
   $('bWalk').lastChild.textContent = '걷는 중 · 멈춤'; $('bWalk').classList.add('walking');
   setFold(true, false); // 걷는 동안엔 지도를 넓게
@@ -331,13 +373,13 @@ function drawSky() {
 $('bSky').onclick = () => {
   if (mode === 'plan') {
     mode = 'sky'; document.documentElement.dataset.theme = 'dark';
-    map.removeLayer(planLayer); map.removeLayer(meLayer); if (startMarker) map.removeLayer(startMarker); // 밤하늘엔 출발점·오가는 길을 그리지 않는다
+    map.removeLayer(planLayer); map.removeLayer(meLayer); if (startMarker) map.removeLayer(startMarker); if (endMarker) map.removeLayer(endMarker); // 밤하늘엔 출발점·오가는 길을 그리지 않는다
     setBase(store.get('base', 'osm'), true); skyLayer.addTo(map); drawSky(); $('bSky').lastChild.textContent = '산책으로';
     $('bPlan').disabled = $('bLoc').disabled = true; // 밤하늘에선 산책을 짜지 않는다(안 보이는 층에 그려진다)
     $('info').style.display = 'none';
   } else {
     mode = 'plan'; delete document.documentElement.dataset.theme;
-    map.removeLayer(skyLayer); planLayer.addTo(map); meLayer.addTo(map); if (startMarker) startMarker.addTo(map);
+    map.removeLayer(skyLayer); planLayer.addTo(map); meLayer.addTo(map); if (startMarker) startMarker.addTo(map); if (endMarker) endMarker.addTo(map);
     setBase(store.get('base', 'osm'), false); $('bSky').lastChild.textContent = '밤하늘'; $('bPlan').disabled = $('bLoc').disabled = false;
     $('info').style.display = '';
     status(plan ? '하던 산책이 있어요.' : '지도를 눌러 출발할 곳을 골라 주세요.');
@@ -348,16 +390,16 @@ $('bSky').onclick = () => {
 $('bSet').onclick = () => {
   $('sRadius').value = store.get('radius', 1000); $('sSize').value = store.get('size', 400);
   $('sBase').value = store.get('base', 'osm'); $('sKey').value = store.get('vwkey', '');
-  $('sPick').value = store.get('pick', 'all'); $('sMat').value = store.get('matRoute', 'off');
+  $('sPick').value = store.get('pick', 'all'); $('sMat').value = store.get('matRoute', 'off'); $('sVib').value = store.get('vib', 'on');
   $('dSet').showModal();
 };
 $('dSet').addEventListener('close', () => {
   store.set('radius', +$('sRadius').value); store.set('size', +$('sSize').value);
-  store.set('vwkey', $('sKey').value.trim()); store.set('base', $('sBase').value); store.set('pick', $('sPick').value); store.set('matRoute', $('sMat').value);
+  store.set('vwkey', $('sKey').value.trim()); store.set('base', $('sBase').value); store.set('pick', $('sPick').value); store.set('matRoute', $('sMat').value); store.set('vib', $('sVib').value);
   if ($('sBase').value.startsWith('vw-') && !$('sKey').value.trim()) status('V-World 키가 없어 OpenStreetMap으로 보여요');
   if ($('sPick').value === 'custom' && !activeDesign()) status('「내 도안」을 고르셨어요. 도감에서 도안을 먼저 만들어 주세요.');
   setBase(store.get('base', 'osm'), mode === 'sky');
-  setLen(Object.keys(LEN).find(k => LEN[k].radius === +store.get('radius', 1000)), false); // 고급에서 고친 거리를 단추에도(맞는 단추가 없으면 모두 꺼짐)
+  setLen(curLen(), false); // 고급에서 고친 거리를 단추에도(맞는 단추가 없으면 모두 꺼짐)
 });
 
 $('bExport').onclick = () => {
@@ -396,13 +438,28 @@ $('fImport').onchange = async e => {
 
 
 // ---------- 얼마나 걸을까: 짧게·보통·길게 → 반경·모양 크기·고를 모양 ----------
-const LEN = { short: { radius: 500, size: 300 }, mid: { radius: 1000, size: 400 }, long: { radius: 2000, size: 600 } };
+// 분 눈금(「점심 산책」): 10-08 measure_lunch.mjs — 5곳×6회 도형 산책의 총거리 가운데값 1.5·1.93·2.78 km를 4.5 km/h로 환산
+const WALK_M_PER_MIN = 75; // 4.5 km/h — 가정이라 단추에 「쯤」을 붙인다
+const LENS = {
+  km: { short: { radius: 500, size: 300, label: '짧게 · 2~3.5 km' }, mid: { radius: 1000, size: 400, label: '보통 · 4.5~6 km' }, long: { radius: 2000, size: 600, label: '길게 · 6 km 이상' } },
+  min: { short: { radius: 250, size: 150, min: 20, label: '20분쯤 · 1.5 km' }, mid: { radius: 350, size: 200, min: 30, label: '30분쯤 · 1.9 km' }, long: { radius: 500, size: 300, min: 40, label: '40분쯤 · 2.8 km' } },
+};
+const lens = () => LENS[store.get('unit', 'km')] || LENS.km;
+const curLen = () => Object.keys(lens()).find(k => lens()[k].radius === +store.get('radius', 1000) && lens()[k].size === +store.get('size', 400));
 function setLen(k, save = true) {
-  for (const b of document.querySelectorAll('#lenRow [data-len]')) b.setAttribute('aria-pressed', String(b.dataset.len === k));
-  if (save) { store.set('radius', LEN[k].radius); store.set('size', LEN[k].size); }
+  for (const b of document.querySelectorAll('#lenRow [data-len]')) { b.setAttribute('aria-pressed', String(b.dataset.len === k)); b.textContent = lens()[b.dataset.len].label; }
+  $('bUnit').textContent = store.get('unit', 'km') === 'min' ? 'km로 보기' : '분으로 보기';
+  if (save && lens()[k]) { store.set('radius', lens()[k].radius); store.set('size', lens()[k].size); }
 }
 for (const b of document.querySelectorAll('#lenRow [data-len]')) b.onclick = () => setLen(b.dataset.len);
-setLen(Object.keys(LEN).find(k => LEN[k].radius === +store.get('radius', 1000)) || 'mid', false);
+$('bUnit').onclick = () => { const k = curLen() || 'mid'; store.set('unit', store.get('unit', 'km') === 'min' ? 'km' : 'min'); setLen(k); }; // 같은 칸 자리를 다른 눈금으로
+setLen(curLen(), false);
+// 돌아갈 시각 기본값: 점심때(11:30~13:00)면 13:00, 아니면 지금 + 고른 분
+function defaultBackBy(min, now = new Date()) {
+  const m = now.getHours() * 60 + now.getMinutes(), t = m >= 690 && m < 780 ? 780 : m + min;
+  return String(Math.floor(t / 60) % 24).padStart(2, '0') + ':' + String(t % 60).padStart(2, '0');
+}
+const minutesUntil = (hhmm, now = new Date()) => { const [h, m] = hhmm.split(':').map(Number); return h * 60 + m - (now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60); };
 
 // ---------- 메뉴 접기: 손잡이를 누르거나 아래로 밀면 접히고 위로 밀면 펼쳐진다 ----------
 function setFold(on, save = true) {

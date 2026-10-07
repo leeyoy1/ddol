@@ -2,6 +2,6 @@
 import { runPlan } from './plan_job.js';
 
 self.onmessage = async e => {
-  try { self.postMessage({ ok: true, plan: await runPlan(e.data) }); }
+  try { self.postMessage({ ok: true, plan: await runPlan(e.data, (n, total) => self.postMessage({ progress: [n, total] })) }); }
   catch (err) { self.postMessage({ ok: false, msg: err.message || '원정을 짜지 못했어요.' }); }
 };

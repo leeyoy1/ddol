@@ -284,7 +284,9 @@ const pathLen = (G, p) => { let s = 0; for (let i = 0; i + 1 < p.length; i++) { 
 
 // pick: 'all' | 'geo' | 'animal' | 'plant' | 'custom'. custom이면 custom = {name, pts}(단위 좌표 윤곽)
 // near: [[x,y],…] 를 주면 그 지점들 150 m 안의 도착지만 뽑는다(맛집 경유). 하나도 없으면 조건 없이 뽑는다
-export function plan(G, proj, start, radius, size, seed, { pick = 'all', custom = null, onTry, near = null } = {}) {
+// end: [x,y]를 주면 돌아오는 길이 출발점 대신 거기서 끝난다(편도 「끝에서 시작」). 모양 자리는 그대로 출발점 둘레
+// maxTotalKm: 주면 모두 걷는 거리가 이것을 넘는 자리는 다시 뽑는다(「분으로 보기」 — 점심시간을 넘기지 않게). 다 넘으면 가장 짧은 것
+export function plan(G, proj, start, radius, size, seed, { pick = 'all', custom = null, onTry, near = null, end = null, maxTotalKm = null } = {}) {
   const R = rng(seed);
   let cand = candidates(G, start, radius);
   if (near && near.length) {
@@ -294,9 +296,10 @@ export function plan(G, proj, start, radius, size, seed, { pick = 'all', custom 
   if (!cand.length) throw new Error('갈 만한 곳을 찾지 못했어요. 설정에서 거리를 바꿔 보세요.');
   if (pick === 'custom' && !(custom && custom.pts && custom.pts.length >= 4)) throw new Error('먼저 도감에서 내 도안을 만들어 주세요.');
   const pool = pick === 'all' ? [...CATEGORY.geo, ...CATEGORY.animal, ...CATEGORY.plant] : pick === 'custom' ? ['custom'] : CATEGORY[pick];
-  const S = shapes(), s0 = nearest(G, start);
-  let best = null, p = null, shape = null, sz = size;
-  for (let i = 0; i < 8 && !best; i++) { // 모양을 못 그리는 자리면 다른 도착지
+  const S = shapes(), s0 = nearest(G, start), e0 = end ? nearest(G, end) : s0;
+  const walkKm = b => (pathLen(G, shortest(G, s0, b.path[0])) + b.len + pathLen(G, shortest(G, b.path[b.path.length - 1], e0))) / 1000;
+  let best = null, p = null, shape = null, sz = size, spare = null;
+  for (let i = 0; i < (maxTotalKm ? 14 : 8) && !best; i++) { // 모양을 못 그리는 자리면 다른 도착지
     p = cand[Math.floor(R() * cand.length)];
     shape = pool[Math.floor(R() * pool.length)];
     onTry && onTry(i + 1);
@@ -308,10 +311,15 @@ export function plan(G, proj, start, radius, size, seed, { pick = 'all', custom 
     const maxLoopKm = Math.max(1.5, sz * Math.PI / 1000 * 2.2);
     best = search(G, shape === 'custom' ? custom.pts : S[shape], sz, maxLoopKm,
       fig ? { angles: FIGURE_ANGLES, scales: [0.9, 1.1], center: [n.x, n.y], ...SHAPE_MODE } : { rots: 12, scales: [0.9, 1.1], center: [n.x, n.y], ...SHAPE_MODE });
+    if (best && maxTotalKm) { // 시간 예산을 넘으면 기억만 해 두고 다시 뽑는다(10-08 실측: 같은 설정에서 총거리가 가운데값의 1.5배까지 벌어짐)
+      const km = walkKm(best);
+      if (km > maxTotalKm) { if (!spare || km < spare.km) spare = { km, best, p, shape, sz }; best = null; }
+    }
   }
+  if (!best && spare) ({ best, p, shape, sz } = spare);
   if (!best) throw new Error('이 근처엔 모양을 그릴 자리가 없었어요. 다른 출발점을 골라 보세요.');
   const gold = R() < 1 / 12; // 반짝 산책(희귀) — 시드가 같으면 같다
-  const go = shortest(G, s0, best.path[0]), back = shortest(G, best.path[best.path.length - 1], s0);
+  const go = shortest(G, s0, best.path[0]), back = shortest(G, best.path[best.path.length - 1], e0);
   const full = [...go, ...best.path.slice(1), ...back.slice(1)];
   const edgeLen = {};
   let total = 0;
@@ -337,7 +345,7 @@ export function plan(G, proj, start, radius, size, seed, { pick = 'all', custom 
     dir, distKm: +(Math.hypot(cx - st.x, cy - st.y) / 1000).toFixed(1), turn: area > 0 ? '반시계' : '시계',
     devM: +best.dev.toFixed(1), devRatio: +(best.dev / usedSize).toFixed(4), sizeM: Math.round(sz), likeness: likeness(best.fr / usedSize),
     goKm: +(pathLen(G, go) / 1000).toFixed(2), loopKm: +(best.len / 1000).toFixed(2), backKm: +(pathLen(G, back) / 1000).toFixed(2),
-    totalKm: +(total / 1000).toFixed(2),
+    totalKm: +(total / 1000).toFixed(2), oneWay: !!end,
     goLL: go.map(ll), loopLL: best.path.map(ll), backLL: back.map(ll), fullLL: full.map(ll),
     tgtLL: best.tgt.map(([x, y]) => proj.ll(x, y)), edgeLen,
   };
