@@ -88,6 +88,13 @@ svg.i{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-widt
 button.link{flex:none;min-height:24px;border:0;background:none;padding:0 2px;font-size:12px;font-weight:400;color:var(--ink-2);text-decoration:underline;text-underline-offset:2px}
 #info .meta input[type=time]{font:inherit;font-size:13px;border:1px solid var(--line);border-radius:var(--radius);padding:1px 4px;background:var(--paper);color:var(--ink)}
 .pin.far{border-style:dashed;opacity:.8}
+#info .promise{margin-top:6px;font-size:13px;color:var(--ink-2)}
+#info .promise summary{cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+#info .promise input{font:inherit;font-size:13px;border:1px solid var(--line);border-radius:var(--radius);padding:1px 4px;background:var(--paper);color:var(--ink);margin:4px 0}
+#info .promise small{display:block;color:var(--sub)}
+.skipwrap{background:none;border:none}
+.skip{transform:translate(-50%,-50%);width:20px;height:20px;line-height:20px;text-align:center;font-weight:700;color:var(--paper);background:var(--ink-2)}
+#bSkip{flex:0 0 auto;padding-inline:10px;font-size:13px}
 /* 밤하늘에서는 산책 단추를 숨기고 꼬리표만 */
 :root[data-theme="dark"] #sheet .seg,:root[data-theme="dark"] #sheet .unit,:root[data-theme="dark"] #sheet .r1,:root[data-theme="dark"] #sheet .r2{display:none}
 button.walking{border-color:var(--accent);color:var(--accent)}
@@ -235,6 +242,7 @@ details.adv summary{cursor:pointer;font-size:14px;color:var(--ink-2)}
   <div class="row r2">
     <button id="bWalk" disabled><svg class="i"><use href="#i-walk"/></svg>걷기 시작</button>
     <button id="bDone" disabled><svg class="i"><use href="#i-stamp"/></svg>다녀왔어요</button>
+    <button id="bSkip" hidden aria-label="여긴 못 걷겠어요 — 이 근처 모양 길을 판정에서 빼기">못 걷는 길</button>
   </div>
   <div class="tabs">
     <button id="bSky"><svg class="i"><use href="#i-moon"/></svg><span>밤하늘</span></button>

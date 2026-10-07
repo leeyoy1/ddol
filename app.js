@@ -194,7 +194,9 @@ function drawPlan(p) {
        </ol>
        ${matListHtml(p)}
        <div class="meta">모두 ${p.totalKm} km${p.oneWay ? ` · 그리기 ${(p.goKm + p.loopKm).toFixed(1)} km` : ''}${p.minutes ? ` · ${p.minutes}분쯤 · 도형만 그려요` : ''}${p.likeness ? ` · 길이 모양을 닮은 정도 ${stars5(p.likeness)}(별이 많을수록 또렷해요)` : ''} · 모양 길(파란 실선)의 60%를 지나면 별이 돼요</div>${p.backBy ? `
-       <div class="meta"><label>돌아갈 시각 <input type="time" id="backBy" value="${esc(p.backBy)}"></label> · 앱을 켜 둔 동안 상태줄로 알려드려요</div>` : ''}`;
+       <div class="meta"><label>돌아갈 시각 <input type="time" id="backBy" value="${esc(p.backBy)}"></label> · 앱을 켜 둔 동안 상태줄로 알려드려요</div>` : ''}
+       <details class="promise"${p.promise ? ' open' : ''}><summary>이 산책을 약속하기</summary><label>언제 걸을까요 <input type="datetime-local" id="promise" value="${esc(p.promise || '')}"></label>
+         <small>그 시각 15분 안에 「걷기 시작」을 누르면 한 등급 밝은 별이 떠요. 못 지켜도 별은 그대로예요.</small></details>`;
   $('bWalk').disabled = $('bGpx').disabled = false;
   $('bDone').disabled = !(store.get('track', null)?.id === p.id);
   // 가게를 누르면 목록을 접고(지도를 가리지 않게) 그 가게로 간다
@@ -204,6 +206,7 @@ function drawPlan(p) {
     map.once('moveend', () => matMarkers.get(m.k)?.openTooltip());
     map.flyTo(m.ll, 17, { duration: 0.6 });
   };
+  $('promise').onchange = e => { const v = e.target.value; p.promise = /^\d{4}-\d\d-\d\dT\d\d:\d\d$/.test(v) ? v : null; store.set('plan', p); if (p.promise) status(`약속했어요 · ${promiseText(p.promise)}에 걷기 시작하면 한 등급 밝은 별이 떠요.`); };
   if ($('backBy')) $('backBy').onchange = e => { if (/^\d\d:\d\d$/.test(e.target.value)) { p.backBy = e.target.value; warned = false; store.set('plan', p); } };
   fit(L.polyline(p.fullLL).getBounds()); // 안내판을 채운 뒤 높이를 재서 맞춘다
   if (p.oneWay && !p.endPlace) placeName(p.backLL[p.backLL.length - 1].map(v => +v.toFixed(3)), 14).then(({ label, dong }) => {
@@ -262,14 +265,14 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 const trackKm = tr => { let m = 0; for (let i = 1; i < tr.length; i++) m += map.distance(tr[i - 1], tr[i]); return m / 1000; };
 function addPoint(ll) {
   const t = store.get('track', null);
-  const tr = t && plan && t.id === plan.id ? t : { id: plan.id, pts: [] };
+  const tr = t && plan && t.id === plan.id ? t : { id: plan.id, pts: [], skip: [], t0: Date.now() };
   tr.pts.push(ll.map(v => +v.toFixed(6))); store.set('track', tr);
   return tr;
 }
 function stopWalk() {
   if (watchId != null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
   keepAwake(false);
-  $('bWalk').lastChild.textContent = '걷기 시작'; $('bWalk').classList.remove('walking');
+  $('bWalk').lastChild.textContent = '걷기 시작'; $('bWalk').classList.remove('walking'); $('bSkip').hidden = true;
 }
 $('bWalk').onclick = () => {
   if (watchId != null) { stopWalk(); return status('잠시 멈췄어요. 다시 누르면 이어서 기록해요.'); }
@@ -284,7 +287,7 @@ $('bWalk').onclick = () => {
     const ll = [p.coords.latitude, p.coords.longitude], tr = addPoint(ll);
     line.addLatLng(ll); me.setLatLng(ll).addTo(meLayer);
     $('bDone').disabled = false;
-    const cov = Math.round(C.coverage(plan.loopLL, tr.pts) * 100);
+    const cov = Math.round(C.coverage(plan.loopLL, tr.pts, 20, 40, tr.skip) * 100);
     if (!plan.backBy) return status(`걷는 중 · ${trackKm(tr.pts).toFixed(2)} km · 모양 길의 ${cov}%를 지났어요`);
     // 돌아갈 시각: 남은 분 ≤ 지금 자리→끝 곳 직선거리×1.3을 걷는 분이면 알린다(서버가 없어 앱을 켜 둔 동안만)
     const left = minutesUntil(plan.backBy), need = map.distance(ll, plan.backLL[plan.backLL.length - 1]) * 1.3 / WALK_M_PER_MIN;
@@ -292,20 +295,23 @@ $('bWalk').onclick = () => {
     if (!warned) { warned = true; if (store.get('vib', 'on') === 'on' && navigator.vibrate) navigator.vibrate(200); }
     status(left > 0 ? `지금 돌아가면 ${plan.backBy}에 맞춰요 · 모양 길 ${cov}%` : `${plan.backBy}이 지났어요 · 모양 길 ${cov}%`);
   }, err => { if (err.code === 1) { stopWalk(); status('위치 권한이 꺼져 있어요. 브라우저 설정에서 켜 주세요.'); } else status('위치를 받지 못하고 있어요. 하늘이 트인 곳으로 가 보세요.'); }, { enableHighAccuracy: true });
-  $('bWalk').lastChild.textContent = '걷는 중 · 멈춤'; $('bWalk').classList.add('walking');
+  $('bWalk').lastChild.textContent = '잠깐 멈춤'; $('bWalk').classList.add('walking'); $('bSkip').hidden = false;
   setFold(true, false); // 걷는 동안엔 지도를 넓게
   status('기록을 시작했어요. 화면을 켜 둔 채 걸어 주세요. 메뉴는 아래 손잡이로 펼쳐요.');
 };
 
 $('bDone').onclick = () => {
   if (!plan) return;
-  const tr = store.get('track', null), pts = tr && tr.id === plan.id ? tr.pts : [];
-  const cov = C.coverage(plan.loopLL, pts);
-  if (cov < 0.6) return status(`모양 길의 ${Math.round(cov * 100)}%를 지났어요. 60%를 넘기면 별이 돼요.`);
+  const tr = store.get('track', null), mine = tr && tr.id === plan.id, pts = mine ? tr.pts : [], skip = mine ? tr.skip || [] : [];
+  const cov = C.coverage(plan.loopLL, pts, 20, 40, skip), skipped = C.skippedFrac(plan.loopLL, skip);
+  if (cov < C.NEED) return status(`모양 길의 ${Math.round(cov * 100)}%를 지났어요${skipped ? '(못 걷는 길은 빼고)' : ''}. 60%를 넘기면 별이 돼요.`);
+  // 약속: 약속한 시각 15분 안에 걷기 시작했나 · 정각: 돌아갈 시각과 1분 안
+  const kept = !!(plan.promise && mine && tr.t0 && Math.abs(tr.t0 - new Date(plan.promise).getTime()) <= 15 * 60000);
+  const late = plan.backBy ? Math.round(-minutesUntil(plan.backBy) * 60) : null, ontime = late != null && Math.abs(late) <= 60 ? late : null;
   const walked = store.get('walked', {}), stars = store.get('stars', { stars: [], names: {} });
   if (stars.stars.some(s => s.id === plan.id)) return status('이미 별이 된 산책이에요.');
   const before = stars.stars.slice(), firstOfKind = !before.some(x => x.shape === plan.shape && (plan.shape !== 'custom' || x.designId === plan.designId));
-  const s = C.done(plan, walked, stars, { coverage: cov, walkedKm: +trackKm(pts).toFixed(2) });
+  const s = C.done(plan, walked, stars, { coverage: cov, walkedKm: +trackKm(pts).toFixed(2), skipped, kept, ontime });
   if (!store.set('stars', stars)) return; // 저장 실패 — 산책과 걸은 기록을 그대로 둔다
   store.set('walked', walked); store.set('plan', null); store.set('track', null);
   stopWalk(); plan = null; drawPlan(null); meLayer.clearLayers();
@@ -314,11 +320,13 @@ $('bDone').onclick = () => {
   status(`${s.gold ? '반짝 별' : '새 별'}이 떴어요. 별 ${stars.stars.length}개째예요.`);
   const su = K.suName(K.suIndex(s.ll)), suNew = !before.some(x => Array.isArray(x.ll) && K.suIndex(x.ll) === K.suIndex(s.ll));
   const DIR = { 북방현무: '북쪽', 동방청룡: '동쪽', 남방주작: '남쪽', 서방백호: '서쪽' };
-  const notes = [`서울시청에서 ${DIR[su.group]} ${su.name}수 칸${suNew ? '을 처음 채웠어요(도감의 28칸 성도)' : ''}`, (s.mats || []).length ? `단골집 도장 ${s.mats.length}곳` : '', firstOfKind ? '도감에 새로 올랐어요' : '', ...unlocked.map(a => `업적 「${esc(a.title)}」`)].filter(Boolean);
+  const notes = [`서울시청에서 ${DIR[su.group]} ${su.name}수 칸${suNew ? '을 처음 채웠어요(도감의 28칸 성도)' : ''}`, (s.mats || []).length ? `단골집 도장 ${s.mats.length}곳` : '', kept ? '약속을 지켜 한 등급 밝게' : '', ontime != null ? `정각 도착(${ontime >= 0 ? '+' : ''}${ontime}초)` : '', skipped ? `못 걷는 길 ${Math.round(skipped * 100)}%를 빼고 판정` : '', firstOfKind ? '도감에 새로 올랐어요' : '', ...unlocked.map(a => `업적 「${esc(a.title)}」`)].filter(Boolean);
   const GR = ['', '가장 밝은 별', '밝은 별', '보통 별', '흐린 별', '아주 흐린 별'];
   $('info').innerHTML = `<div class="cele">${emoji(s.shape)} ${esc(shapeName(s))} · ${s.grade}등성(${GR[s.grade]})
       <small>모양 길의 ${Math.round(cov * 100)}%를 따라 걸었어요${notes.length ? ' · ' + notes.join(' · ') : ''}</small></div>
-    <div class="row" style="margin-top:6px"><button id="bCard">작품 카드 만들기</button><button id="bDex2">도감 보기</button></div>`;
+    <div class="row" style="margin-top:6px"><button id="bCard">작품 카드 만들기</button><button id="bDex2">도감 보기</button></div>${skip.length ? `
+    <div class="row" style="margin-top:6px"><button id="bReport">못 걷는 길 알림 문구 복사</button></div>` : ''}`;
+  if (skip.length) $('bReport').onclick = () => copyReport(skip);
   setFold(false, false);
   $('bCard').onclick = () => saveCard(s);
   $('bDex2').onclick = openDex;
@@ -420,6 +428,7 @@ const okLL = a => Array.isArray(a) && a.length === 2 && a.every(isNum);
 const okMat = m => m && isStr(m.k, 300) && isStr(m.n) && isStr(m.a) && Number.isInteger(m.t) && Number.isInteger(m.v) && okLL(m.ll);
 const okStar = s => s && isStr(s.id, 40) && isStr(s.date, 6) && isStr(s.shape, 20) && okLL(s.ll) && Number.isInteger(s.grade) && s.grade >= 1 && s.grade <= 5
   && Array.isArray(s.loopLL) && s.loopLL.every(okLL) && (s.mats == null || (Array.isArray(s.mats) && s.mats.every(okMat)))
+  && (s.skipped == null || isNum(s.skipped)) && (s.ontime == null || isNum(s.ontime)) && (s.rule == null || Number.isInteger(s.rule)) && (s.kept == null || typeof s.kept === 'boolean')
   && (s.name == null || isStr(s.name, 20)) && (s.dong == null || isStr(s.dong, 40)) && (s.designId == null || isStr(s.designId, 40));
 const okDesign = d => d && isStr(d.id, 40) && isStr(d.name, 20) && Array.isArray(d.pts) && d.pts.length >= 4 && d.pts.length <= 80 && d.pts.every(okLL);
 $('fImport').onchange = async e => {
@@ -620,7 +629,8 @@ async function saveCard(s) {
   const suc = K.suName(K.suIndex(s.ll)); g.font = '600 40px "IBM Plex Sans KR", sans-serif'; g.fillStyle = '#f2d98a'; g.fillText(`${suc.group} ${suc.name}수`, W / 2, 1160); g.fillStyle = '#fff';
   g.font = '36px "IBM Plex Sans KR", sans-serif'; g.fillStyle = '#c9d6ff';
   g.fillText(`${s.grade}등성 · ${s.walkedKm ? s.walkedKm + ' km 걸어서 그림 · ' : ''}20${s.date.slice(0, 2)}.${s.date.slice(2, 4)}.${s.date.slice(4, 6)}`, W / 2, 1220);
-  g.font = '30px "IBM Plex Sans KR", sans-serif'; g.fillStyle = '#8fa0c8'; g.fillText('동네 별자리 · leeyoy1.github.io/ddol', W / 2, 1290);
+  if (s.coverage != null) { g.font = '24px "IBM Plex Sans KR", sans-serif'; g.fillStyle = '#8fa0c8'; g.fillText(ruleNote(s), W / 2, 1258); }
+  g.font = '30px "IBM Plex Sans KR", sans-serif'; g.fillStyle = '#8fa0c8'; g.fillText('동네 별자리 · leeyoy1.github.io/ddol', W / 2, 1305);
   const blob = await new Promise(r => cv.toBlob(r, 'image/png'));
   const file = new File([blob], `동네별자리_${shapeName(s)}_${s.date}.png`, { type: 'image/png' });
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
@@ -631,6 +641,38 @@ async function saveCard(s) {
   status('작품 카드를 저장했어요. 지도와 좌표는 담기지 않아요.');
 }
 
-if (plan) { drawPlan(plan); status('하던 산책이 있어요. 「걷기 시작」으로 이어서 걸어요.'); }
+// ---------- 못 걷는 길: 지금 자리 둘레 60 m의 모양 길을 판정에서 뺀다(뺀 몫은 40%까지) ----------
+$('bSkip').onclick = () => {
+  const tr = store.get('track', null);
+  if (!plan || !tr || tr.id !== plan.id || !tr.pts.length) return status('위치를 받은 뒤에 눌러 주세요.');
+  const here = tr.pts[tr.pts.length - 1], skip = [...(tr.skip || []), here];
+  const before = C.skippedFrac(plan.loopLL, tr.skip || []), after = C.skippedFrac(plan.loopLL, skip);
+  if (after === before) return status('여기는 모양 길에서 멀어요. 모양 길 위에서 눌러 주세요.');
+  if (after > C.SKIP_MAX) return status(`모양 길의 ${Math.round(C.SKIP_MAX * 100)}%까지만 뺄 수 있어요. 다른 날 다시 걸어도 좋아요.`);
+  tr.skip = skip; store.set('track', tr);
+  L.marker(here, { icon: L.divIcon({ className: 'skipwrap', html: '<div class="skip">✕</div>', iconSize: null }), interactive: false }).addTo(meLayer);
+  status(`이 근처 모양 길을 판정에서 뺐어요 · 지금까지 ${Math.round(after * 100)}% 뺌. 다녀온 뒤 알림 문구를 복사할 수 있어요.`);
+};
+// 알림 문구: 자리는 약 50 m 단위로 뭉갠다. 앱은 어디로도 보내지 않는다 — 사용자가 직접 붙여 넣는다
+const grid = v => (Math.round(v / 0.0005) * 0.0005).toFixed(4);
+function reportText(skip) {
+  const spots = [...new Set(skip.map(([a, b]) => `위도 ${grid(a)}, 경도 ${grid(b)} 부근`))];
+  return ['[보행 불편 구간 알림]', '아래 자리 부근은 걸어서 지나기 어려웠습니다. (계단·보도 끊김·어두움·공사 등 — 구체적인 사정을 덧붙여 주세요)',
+    ...spots.map(x => '- ' + x + ' (약 50 m 범위)'), `※ ${localDate()} 산책 기록에서 뽑음 · 위치는 약 50 m 단위로 뭉갬`].join('\n');
+}
+const localDate = (d = new Date()) => `${d.getFullYear()}.${d.getMonth() + 1}.${d.getDate()}`;
+async function copyReport(skip) {
+  const t = reportText(skip);
+  try { await navigator.clipboard.writeText(t); status('문구를 복사했어요. 서울시 응답소나 안전신문고 같은 곳에 직접 붙여 넣어 보내 주세요. 앱은 아무 데도 보내지 않아요.'); }
+  catch { prompt('이 문구를 복사해 직접 보내 주세요', t); }
+}
+const promiseText = v => { const d = new Date(v); return `${d.getMonth() + 1}월 ${d.getDate()}일 ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+// 판정 쪽지: 이 별이 어느 규칙으로 떴는지(규칙이 바뀌어도 남는다). 좌표는 담지 않는다
+function ruleNote(s) {
+  return [`판정 규칙 ${s.rule || 2} · 모양 길 ${Math.round(s.coverage * 100)}% 지남(기준 ${Math.round(C.NEED * 100)}%)`,
+    s.skipped ? `못 걷는 길 ${Math.round(s.skipped * 100)}% 뺌` : '', s.kept ? '약속 지킴' : '', s.ontime != null ? `정각 ${s.ontime >= 0 ? '+' : ''}${s.ontime}초` : ''].filter(Boolean).join(' · ');
+}
+
+if (plan) { drawPlan(plan); status(plan.promise ? `약속한 산책이 있어요 · ${promiseText(plan.promise)}. 그때 「걷기 시작」을 눌러 주세요.` : '하던 산책이 있어요. 「걷기 시작」으로 이어서 걸어요.'); }
 loadMat(); // 단골집 자료가 있으면 설정·도감에 그 칸을 보인다
 window.__app = { setStart, C, outlineFromRGBA, map, addPoint, get plan() { return plan; } }; // 점검용

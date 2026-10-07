@@ -355,26 +355,41 @@ export function plan(G, proj, start, radius, size, seed, { pick = 'all', custom 
 export const likeness = r => r < 0.08 ? 5 : r < 0.11 ? 4 : r < 0.15 ? 3 : r < 0.2 ? 2 : 1;
 
 // 걸은 기록이 모양 길(고리)을 얼마나 지났나: 고리를 20 m 간격으로 나눠 40 m 안에 걸은 점이 있는 비율
-export function coverage(loopLL, trackLL, step = 20, near = 40) {
-  if (!loopLL.length || !trackLL.length) return 0;
+// skipLL: 「여긴 못 걷겠다」를 누른 자리들 — 그 SKIP_M 안의 고리 점은 분자·분모에서 함께 뺀다(계단·끊긴 보도도 별이 되게)
+export const SKIP_M = 60, SKIP_MAX = 0.4; // 뺄 수 있는 몫의 상한 — 넘으면 판정이 빈 껍데기가 된다
+// 판정 규칙 판번호(별의 판정 쪽지에 남는다): 1 = 닮음으로 등급(10-07 첫 판), 2 = 모양 길 60% 지나기, 3 = 2 + 못 걷는 길 빼기·약속·정각
+export const RULE_V = 3, NEED = 0.6;
+function loopSamples(loopLL, step) {
   const k = Math.cos(loopLL[0][0] * Math.PI / 180) * 111320, xy = ([a, b]) => [b * k, a * 110540];
-  const L = loopLL.map(xy), Tr = trackLL.map(xy), pts = densify(L, step);
-  let hit = 0;
-  for (const p of pts) if (Tr.some(q => (q[0] - p[0]) ** 2 + (q[1] - p[1]) ** 2 <= near * near)) hit++;
-  return hit / pts.length;
+  return { xy, pts: densify(loopLL.map(xy), step) };
+}
+const nearAny = (p, Q, r) => Q.some(q => (q[0] - p[0]) ** 2 + (q[1] - p[1]) ** 2 <= r * r);
+export function skippedFrac(loopLL, skipLL, step = 20) {
+  if (!loopLL.length || !skipLL || !skipLL.length) return 0;
+  const { xy, pts } = loopSamples(loopLL, step), S = skipLL.map(xy);
+  return pts.filter(p => nearAny(p, S, SKIP_M)).length / pts.length;
+}
+export function coverage(loopLL, trackLL, step = 20, near = 40, skipLL = []) {
+  if (!loopLL.length || !trackLL.length) return 0;
+  const { xy, pts } = loopSamples(loopLL, step), Tr = trackLL.map(xy), S = (skipLL || []).map(xy);
+  const keep = S.length ? pts.filter(p => !nearAny(p, S, SKIP_M)) : pts;
+  if (!keep.length) return 0;
+  return keep.filter(p => nearAny(p, Tr, near)).length / keep.length;
 }
 // 별 등급은 실제로 따라 걸은 비율로: 90%↑ 1등성 · 80%↑ 2 · 70%↑ 3 · 그 밖 4 (새 길이 30% 미만이면 한 등급 어둡게)
 export const gradeByCoverage = (cov, newFrac) => Math.min(5, (cov >= 0.9 ? 1 : cov >= 0.8 ? 2 : cov >= 0.7 ? 3 : 4) + (newFrac < 0.3 ? 1 : 0));
 
-export function done(rec, walked, stars, { coverage: cov = null, walkedKm = null } = {}) {
+// kept: 약속한 시각에 걷기 시작함 → 한 등급 밝게 · ontime: 돌아갈 시각과의 차(초, 1분 안일 때만) · skipped: 뺀 몫
+export function done(rec, walked, stars, { coverage: cov = null, walkedKm = null, skipped = 0, kept = false, ontime = null } = {}) {
   let nw = 0, tot = 0;
   for (const [k, l] of Object.entries(rec.edgeLen)) { tot += l; if (!(k in walked)) nw += l; }
   const frac = tot ? nw / tot : 0;
   Object.assign(walked, rec.edgeLen);
   const star = { id: rec.id, date: rec.id.slice(0, 6), shape: rec.shape, name: rec.customName || null, designId: rec.designId || null,
     gold: !!rec.gold, dong: rec.dong || null, mats: rec.mats || [], totalKm: rec.totalKm || 0, ll: rec.center || rec.star, loopLL: rec.loopLL,
-    newKm: +(nw / 1000).toFixed(2), newFrac: +frac.toFixed(3), grade: cov == null ? grade(rec.devRatio, frac) : gradeByCoverage(cov, frac),
+    newKm: +(nw / 1000).toFixed(2), newFrac: +frac.toFixed(3), grade: cov == null ? grade(rec.devRatio, frac) : Math.max(1, gradeByCoverage(cov, frac) - (kept ? 1 : 0)),
     coverage: cov == null ? null : +cov.toFixed(2), walkedKm };
+  if (cov != null) Object.assign(star, { rule: RULE_V, skipped: +skipped.toFixed(2), kept: !!kept, ontime });
   stars.stars.push(star);
   return star;
 }
