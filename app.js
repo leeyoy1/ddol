@@ -467,12 +467,12 @@ function setLen(k, save = true) {
 for (const b of document.querySelectorAll('#lenRow [data-len]')) b.onclick = () => setLen(b.dataset.len);
 $('bUnit').onclick = () => { const k = curLen() || 'mid'; store.set('unit', store.get('unit', 'km') === 'min' ? 'km' : 'min'); setLen(k); }; // 같은 칸 자리를 다른 눈금으로
 setLen(curLen(), false);
-// 돌아갈 시각 기본값: 점심때(11:30~13:00)면 13:00, 아니면 지금 + 고른 분
+// 돌아갈 시각 기본값: 점심때(11:30~13:00)면 13:00과 「지금 + 고른 분」 중 늦은 쪽 — 12:50에 40분을 뽑고 바로 「돌아가세요」를 듣지 않게(10-08 사용자 결정)
 function defaultBackBy(min, now = new Date()) {
-  const m = now.getHours() * 60 + now.getMinutes(), t = m >= 690 && m < 780 ? 780 : m + min;
+  const m = now.getHours() * 60 + now.getMinutes(), t = m >= 690 && m < 780 ? Math.max(780, m + min) : m + min;
   return String(Math.floor(t / 60) % 24).padStart(2, '0') + ':' + String(t % 60).padStart(2, '0');
 }
-const minutesUntil = (hhmm, now = new Date()) => { const [h, m] = hhmm.split(':').map(Number); return h * 60 + m - (now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60); };
+const minutesUntil = (hhmm, now = new Date()) => { const [h, m] = hhmm.split(":").map(Number), d = h * 60 + m - (now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60); return d < -720 ? d + 1440 : d; }; // 자정을 넘는 시각(23:50에 뽑은 00:10)은 다음 날로
 
 // ---------- 메뉴 접기: 손잡이를 누르거나 아래로 밀면 접히고 위로 밀면 펼쳐진다 ----------
 function setFold(on, save = true) {
