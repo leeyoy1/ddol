@@ -90,6 +90,11 @@ dialog p{font-size:13px;color:var(--sub);line-height:1.5}
 #info .cele{font-size:15px;font-weight:800}
 #info .cele small{display:block;font-weight:600;color:var(--sub);margin-top:2px}
 #info .row button{min-height:40px;font-size:14px}
+.mpin{background:none;border:none}
+.mpin div{position:absolute;transform:translate(-50%,-50%);width:26px;height:26px;border-radius:50%;background:#fff;border:2px solid #e07a5f;display:flex;align-items:center;justify-content:center;font-size:14px;box-shadow:0 1px 4px rgba(0,0,0,.3)}
+.mpin.t3 div{border-color:#f5c542;width:30px;height:30px;font-size:16px}
+.mat{display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px}
+.mat small{color:var(--sub)}
 </style>
 </head>
 <body>
@@ -118,6 +123,8 @@ dialog p{font-size:13px;color:var(--sub);line-height:1.5}
     <label>무엇을 그릴까요</label>
     <select id="sPick"><option value="all">전부 무작위 🎲</option><option value="geo">도형 ⭐💗🔺</option><option value="animal">동물 🐟🐱🐰🐳</option><option value="plant">식물 🌷🌸🌲🌵</option><option value="custom">내 도안 ✍️ (도감에서 고른 것)</option></select>
     <p>「내 도안」은 도감에서 직접 그리거나 그림을 올려 만들어요. 동물·식물·내 도안은 알아볼 수 있게 지름을 600 m 이상으로 그려요.</p>
+    <label>공무원 맛집 경유</label>
+    <select id="sMat"><option value="off">상관없음</option><option value="on">맛집 근처를 도착지로 🍽️</option></select>
     <label>반경(출발점에서 도착지까지)</label>
     <select id="sRadius"><option value="1000">1 km</option><option value="1500">1.5 km</option><option value="2000" selected>2 km</option><option value="3000">3 km</option></select>
     <label>모양 크기(지름)</label>
@@ -146,6 +153,9 @@ dialog p{font-size:13px;color:var(--sub);line-height:1.5}
     <div class="grid" id="dexMine" style="margin-top:8px"></div>
     <h4>업적</h4>
     <div id="achList"></div>
+    <h4>공무원 맛집 도장 <span style="font-weight:500;font-size:12px;color:var(--sub)">— 원정 길 60 m 안에서 지나간 곳</span></h4>
+    <div id="matList"></div>
+    <p style="font-size:11px;color:var(--sub);margin:6px 0 0">자료: 서울특별시 본청 업무추진비 목록(서울 열린데이터광장, 공공누리 제1유형). 6번 이상 간 가게만, 가게 이름·주소·횟수만 씁니다. 👑 30번↑ · 🥇 12번↑ · 🍽️ 6번↑</p>
     <h4>동네 스탬프</h4>
     <div class="chips" id="stampList"></div>
     <div style="height:12px"></div>

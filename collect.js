@@ -24,6 +24,13 @@ export function stamps(S) {
   return [...m.entries()].map(([dong, n]) => ({ dong, n })).sort((a, b) => b.n - a.n || a.dong.localeCompare(b.dong));
 }
 
+// 공무원 맛집 도장 — 원정 길 60 m 안에서 지나간 가게(별 기록의 mats)
+export function matStamps(S) {
+  const m = new Map();
+  for (const s of S) for (const x of s.mats || []) { const e = m.get(x.k) || { ...x, times: 0 }; e.times++; m.set(x.k, e); }
+  return [...m.values()].sort((a, b) => b.t - a.t || b.v - a.v);
+}
+
 const has = (S, list) => list.filter(k => kinds(S).has(k)).length;
 const designsWalked = S => new Set(S.filter(s => s.shape === 'custom' && s.designId).map(s => s.designId)).size;
 
@@ -43,6 +50,9 @@ const RULES = [
   ['maker', '🎨', '첫 작품', '내 도안으로 원정 다녀오기', S => Math.min(1, designsWalked(S))],
   ['maker3', '🖌️', '동네 화가', '내 도안 3개로 원정 다녀오기', S => Math.min(1, designsWalked(S) / 3)],
   ['dong5', '📮', '동네 마당발', '동네 스탬프 5곳', S => Math.min(1, stamps(S).length / 5)],
+  ['mat1', '🍽️', '공무원 맛집', '원정 길에 공무원 맛집 지나가기', S => Math.min(1, matStamps(S).length)],
+  ['mat10', '🥢', '맛집 탐방가', '공무원 맛집 도장 10곳', S => Math.min(1, matStamps(S).length / 10)],
+  ['matTop', '👑', '전설의 맛집', '30번 넘게 간 공무원 맛집 지나가기', S => matStamps(S).some(m => m.t === 3) ? 1 : 0],
 ];
 
 export function achievements(S) {

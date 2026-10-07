@@ -214,8 +214,14 @@ const COMPASS = ['동', '북동', '북', '북서', '서', '남서', '남', '남�
 const pathLen = (G, p) => { let s = 0; for (let i = 0; i + 1 < p.length; i++) { const a = G.nodes.get(p[i]), b = G.nodes.get(p[i + 1]); s += Math.hypot(a.x - b.x, a.y - b.y); } return s; };
 
 // pick: 'all' | 'geo' | 'animal' | 'plant' | 'custom'. custom이면 custom = {name, pts}(단위 좌표 윤곽)
-export function plan(G, proj, start, radius, size, seed, { pick = 'all', custom = null, onTry } = {}) {
-  const R = rng(seed), cand = candidates(G, start, radius);
+// near: [[x,y],…] 를 주면 그 지점들 150 m 안의 도착지만 뽑는다(맛집 경유). 하나도 없으면 조건 없이 뽑는다
+export function plan(G, proj, start, radius, size, seed, { pick = 'all', custom = null, onTry, near = null } = {}) {
+  const R = rng(seed);
+  let cand = candidates(G, start, radius);
+  if (near && near.length) {
+    const close = cand.filter(id => { const n = G.nodes.get(id); return near.some(([x, y]) => (n.x - x) ** 2 + (n.y - y) ** 2 < 150 * 150); });
+    if (close.length) cand = close;
+  }
   if (!cand.length) throw new Error('조건에 맞는 도착지가 없어요 — 반경을 바꿔 보세요');
   if (pick === 'custom' && !(custom && custom.pts && custom.pts.length >= 4)) throw new Error('먼저 설정에서 내 그림을 올려 주세요');
   const pool = pick === 'all' ? [...CATEGORY.geo, ...CATEGORY.animal, ...CATEGORY.plant] : pick === 'custom' ? ['custom'] : CATEGORY[pick];
@@ -270,7 +276,7 @@ export function done(rec, walked, stars) {
   const frac = tot ? nw / tot : 0;
   Object.assign(walked, rec.edgeLen);
   const star = { id: rec.id, date: rec.id.slice(0, 6), shape: rec.shape, name: rec.customName || null, designId: rec.designId || null,
-    gold: !!rec.gold, dong: rec.dong || null, totalKm: rec.totalKm || 0, ll: rec.center || rec.star, loopLL: rec.loopLL,
+    gold: !!rec.gold, dong: rec.dong || null, mats: rec.mats || [], totalKm: rec.totalKm || 0, ll: rec.center || rec.star, loopLL: rec.loopLL,
     newKm: +(nw / 1000).toFixed(2), newFrac: +frac.toFixed(3), grade: grade(rec.devRatio, frac) };
   stars.stars.push(star);
   return star;

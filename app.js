@@ -99,6 +99,25 @@ async function placeName(ll) {
   } catch { return { label: null, dong: null }; }
 }
 
+// ---------- 공무원 맛집 (mat.json — mat_build.py 산출, 없으면 이 기능은 조용히 꺼진다) ----------
+let MAT = undefined;
+const TIER = ['', '🍽️', '🥇', '👑'];
+async function loadMat() {
+  if (MAT !== undefined) return MAT;
+  try { const r = await fetch('mat.json'); MAT = r.ok ? (await r.json()).places : null; } catch { MAT = null; }
+  return MAT;
+}
+// 경로 점(위경도) 60 m 안의 맛집
+function matsOnRoute(ll) {
+  if (!MAT || !ll.length) return [];
+  const k = Math.cos(ll[0][0] * Math.PI / 180) * 111320, R2 = 60 * 60;
+  const lats = ll.map(p => p[0]), lons = ll.map(p => p[1]);
+  const bb = [Math.min(...lats) - 0.001, Math.max(...lats) + 0.001, Math.min(...lons) - 0.001, Math.max(...lons) + 0.001];
+  return MAT.filter(m => m.ll[0] > bb[0] && m.ll[0] < bb[1] && m.ll[1] > bb[2] && m.ll[1] < bb[3])
+    .filter(m => ll.some(([a, b]) => ((a - m.ll[0]) * 110540) ** 2 + ((b - m.ll[1]) * k) ** 2 < R2))
+    .map(m => ({ k: m.n + '|' + m.a, n: m.n, a: m.a, t: m.t, v: m.v, ll: m.ll }));
+}
+
 // ---------- 원정 ----------
 function drawPlan(p) {
   planLayer.clearLayers();
@@ -115,6 +134,8 @@ function drawPlan(p) {
   // 도착 핀은 모양 위쪽 가장자리에 — 가운데에 두면 그릴 모양을 덮는다
   const topLat = Math.max(...p.tgtLL.map(q => q[0])), midLon = p.tgtLL.reduce((s, q) => s + q[1], 0) / p.tgtLL.length;
   pin(legacy ? p.star : [topLat, midLon], emoji(p.shape), `${p.gold ? '✨ ' : ''}도착 · ${shapeName(p)}`, p.gold ? '#f5c542' : '#f5a623', p.gold ? 'big gold' : 'big').addTo(planLayer);
+  for (const m of p.mats || []) L.marker(m.ll, { icon: L.divIcon({ className: 'mpin t' + m.t, iconSize: null, html: `<div>${TIER[m.t]}</div>` }) })
+    .addTo(planLayer).bindTooltip(esc(`${m.n} · 공무원이 ${m.v}번 간 곳`));
   const e = emoji(p.shape), n = esc(shapeName(p));
   $('info').innerHTML = legacy
     ? `<div class="ttl">${e} ${n} 원정 <span class="sub">왕복 ${p.totalKm} km</span></div>`
@@ -125,6 +146,7 @@ function drawPlan(p) {
          <li><i class="sw loop"></i>✏️ ${n} 한 바퀴 (${p.turn} 방향) <b>${p.loopKm} km</b></li>
          <li><i class="sw back"></i>✏️ → 🚩 돌아오기 <b>${p.backKm} km</b></li>
        </ol>
+       ${(p.mats || []).length ? `<div class="where">🍽️ 길 위 공무원 맛집 ${p.mats.length}곳 — ${p.mats.slice().sort((a, b) => b.v - a.v).slice(0, 3).map(m => `${TIER[m.t]} ${esc(m.n)}`).join(', ')}${p.mats.length > 3 ? ' …' : ''}</div>` : ''}
        <div class="meta">모두 ${p.totalKm} km · 모양 지름 ${p.sizeM} m · 어긋남 ${p.devM} m</div>`;
   $('bWalk').disabled = $('bDone').disabled = $('bGpx').disabled = false;
   fit(L.polyline(p.fullLL).getBounds()); // 안내판을 채운 뒤 높이를 재서 맞춘다
@@ -146,8 +168,10 @@ $('bPlan').onclick = async () => {
     status(`길 ${G.ids.length.toLocaleString()}개 교차점에서 원정을 짜는 중…`);
     await new Promise(r => setTimeout(r, 30)); // 안내 문구가 먼저 그려지게
     const seed = Math.floor(Math.random() * 1e6);
-    const d = activeDesign();
-    plan = C.plan(G, proj, [0, 0], radius, size, seed, { pick, custom: d && { id: d.id, name: d.name, pts: d.pts } });
+    const d = activeDesign(), mats = await loadMat();
+    const near = store.get('matRoute', 'off') === 'on' && mats ? mats.map(m => proj.xy(m.ll[0], m.ll[1])).filter(([x, y]) => Math.hypot(x, y) <= radius * 1.1) : null;
+    plan = C.plan(G, proj, [0, 0], radius, size, seed, { pick, custom: d && { id: d.id, name: d.name, pts: d.pts }, near });
+    plan.mats = matsOnRoute(plan.fullLL);
     store.set('plan', plan);
     drawPlan(plan);
     status(`${plan.gold ? '✨ 반짝 원정이에요! ' : ''}${emoji(plan.shape)} 파란 점선을 따라 ✏️까지 가서, 빨간 선으로 ${shapeName(plan)}${eulReul(shapeName(plan))} 그리고 돌아오세요.`);
@@ -183,7 +207,7 @@ $('bDone').onclick = () => {
   const unlocked = K.newlyUnlocked(before, stars.stars);
   status(`${s.gold ? '✨ 반짝 별! ' : '새 별! '}${s.grade}등성 · 새 길 ${s.newKm} km · 별 ${stars.stars.length}개째`);
   $('info').innerHTML = `<div class="cele">${emoji(s.shape)} ${esc(shapeName(s))} — ${s.grade}등성${s.gold ? ' ✨' : ''}
-      <small>${firstOfKind ? '📖 도감에 새로 올랐어요! ' : ''}${unlocked.map(a => `${a.emoji} 업적 「${esc(a.title)}」`).join(' · ')}</small></div>
+      <small>${(s.mats || []).length ? `🍽️ 맛집 도장 ${s.mats.length}곳 · ` : ''}${firstOfKind ? '📖 도감에 새로 올랐어요! ' : ''}${unlocked.map(a => `${a.emoji} 업적 「${esc(a.title)}」`).join(' · ')}</small></div>
     <div class="row" style="margin-top:6px"><button id="bCard">🖼️ 작품 카드 만들기</button><button id="bDex2" class="sub">📖 도감 보기</button></div>`;
   $('bCard').onclick = () => saveCard(s);
   $('bDex2').onclick = openDex;
@@ -243,12 +267,12 @@ $('bSky').onclick = () => {
 $('bSet').onclick = () => {
   $('sRadius').value = store.get('radius', 2000); $('sSize').value = store.get('size', 400);
   $('sBase').value = store.get('base', 'osm'); $('sKey').value = store.get('vwkey', '');
-  $('sPick').value = store.get('pick', 'all');
+  $('sPick').value = store.get('pick', 'all'); $('sMat').value = store.get('matRoute', 'off');
   $('dSet').showModal();
 };
 $('dSet').addEventListener('close', () => {
   store.set('radius', +$('sRadius').value); store.set('size', +$('sSize').value);
-  store.set('vwkey', $('sKey').value.trim()); store.set('base', $('sBase').value); store.set('pick', $('sPick').value);
+  store.set('vwkey', $('sKey').value.trim()); store.set('base', $('sBase').value); store.set('pick', $('sPick').value); store.set('matRoute', $('sMat').value);
   if ($('sBase').value.startsWith('vw-') && !$('sKey').value.trim()) status('V-World 키가 없어 OpenStreetMap으로 보여요');
   if ($('sPick').value === 'custom' && !activeDesign()) status('「내 도안」을 고르셨어요 — 도감에서 도안을 먼저 만들어 주세요');
   setBase(store.get('base', 'osm'), mode === 'sky');
@@ -297,6 +321,11 @@ function renderDex() {
   $('achList').innerHTML = A.map(a => `<div class="ach${a.ok ? '' : ' no'}"><div class="e">${a.emoji}</div>
       <div class="t"><b>${esc(a.title)}</b> ${a.ok ? '✅' : ''}<br><span style="color:var(--sub)">${esc(a.desc)}</span>
       ${a.ok ? '' : `<div class="bar" style="margin-top:4px"><i style="width:${pct(a.progress)}%"></i></div>`}</div></div>`).join('');
+  const MS = K.matStamps(S);
+  loadMat().then(all => {
+    $('matList').innerHTML = (all ? `<div style="font-size:13px;margin-bottom:4px">🍽️ ${MS.length} / ${all.length}곳</div>` : '<div style="font-size:13px;color:var(--sub)">맛집 자료를 아직 싣지 않았어요</div>')
+      + MS.slice(0, 30).map(m => `<div class="mat"><span>${TIER[m.t]} <b>${esc(m.n)}</b><br><small>${esc(m.a)}</small></span><small>공무원 ${m.v}번<br>나는 ${m.times}번</small></div>`).join('');
+  });
   $('stampList').innerHTML = ST.length ? ST.map(x => `<span class="chip">📮 ${esc(x.dong)}${x.n > 1 ? ' ×' + x.n : ''}</span>`).join('')
     : '<span style="font-size:13px;color:var(--sub)">원정을 다녀오면 도착한 동네 도장이 찍혀요</span>';
 }
