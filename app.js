@@ -81,6 +81,7 @@ const inSeoul = async (lat, lon) => {
 function clearEnd() { if (endMarker) map.removeLayer(endMarker); end = endMarker = null; }
 async function setEnd(lat, lon) {
   if (!(await inSeoul(lat, lon))) return status('서울 안에서만 고를 수 있어요.');
+  if (!start || plan || mode !== 'plan') return; // 기다리는 사이 출발 핀을 지웠거나 산책을 뽑았거나 밤하늘로 갔으면 그만
   clearEnd();
   const d = map.distance(start, [lat, lon]);
   if (d < +store.get('radius', 1000) / 2) return status('출발점과 너무 가까워서 한 바퀴 돌아 출발점으로 돌아와요.');
@@ -236,7 +237,10 @@ $('bPlan').onclick = async () => {
     const d = activeDesign(), mats = await loadMat();
     status('어디로 갈지 고르는 중…');
     const L0 = lens()[curLen()], minutes = store.get('unit', 'km') === 'min' && L0 ? L0.min : null;
-    plan = await planAsync({ lat: start[0], lon: start[1], endLat: end ? end[0] : null, endLon: end ? end[1] : null,
+    // 다시 뽑을 때도 끝낼 곳을 잇는다 — 끝 핀은 뽑은 뒤 지워지므로 지금 산책의 끝 마디에서(새로 고침 뒤에도)
+    let fin = end || (plan && plan.oneWay ? plan.backLL[plan.backLL.length - 1] : null);
+    if (fin && map.distance(start, fin) > END_MAX_M) fin = null; // 출발이 지금 자리로 바뀌어 멀어졌으면 왕복으로
+    plan = await planAsync({ lat: start[0], lon: start[1], endLat: fin ? fin[0] : null, endLon: fin ? fin[1] : null,
       maxTotalKm: minutes ? minutes * WALK_M_PER_MIN / 1000 * 1.2 : null, radius, size, pick, seed: Math.floor(Math.random() * 1e6),
       custom: d && { id: d.id, name: d.name, pts: d.pts },
       nearLL: store.get('matRoute', 'off') === 'on' && mats ? mats.map(m => m.ll) : null });
