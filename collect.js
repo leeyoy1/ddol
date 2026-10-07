@@ -53,7 +53,6 @@ export function suFilled(S) {
   for (const s of S) if (Array.isArray(s.ll)) { const i = suIndex(s.ll); m.set(i, (m.get(i) || 0) + 1); }
   return m;
 }
-const guardians = S => { const f = suFilled(S); return SU.map((_, g) => [0, 1, 2, 3, 4, 5, 6].every(k => f.has(g * 7 + k))); };
 
 const has = (S, list) => list.filter(k => kinds(S).has(k)).length;
 const designsWalked = S => new Set(S.filter(s => s.shape === 'custom' && s.designId).map(s => s.designId)).size;

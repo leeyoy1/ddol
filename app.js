@@ -61,7 +61,8 @@ const pin = (ll, e, text, color, cls = '') => L.marker(ll, {
 });
 
 const planLayer = L.layerGroup().addTo(map), skyLayer = L.layerGroup(), meLayer = L.layerGroup().addTo(map);
-let start = null, startMarker = null, plan = store.get('plan', null), track = [], watchId = null;
+let start = null, startMarker = null, plan = store.get('plan', null), watchId = null;
+if (plan && !plan.goLL) plan = null; // 10-07 첫 판 산책은 모양 길(loopLL)이 없어 걸어도 별이 될 수 없다 — 버린다
 
 function setStart(lat, lon, why) {
   start = [lat, lon];
@@ -147,25 +148,19 @@ function drawPlan(p) {
   planLayer.clearLayers();
   $('sheet').classList.toggle('active', !!p);
   if (!p) { $('info').innerHTML = ''; return; }
-  const legacy = !p.goLL; // 예전 판 산책(가는 길·돌아오는 길 구분 없음)
   L.polyline(p.tgtLL, { color: T('--path-back'), dashArray: '4 6', weight: 2 }).addTo(planLayer);
-  if (legacy) L.polyline(p.fullLL, { color: T('--accent'), weight: 5, opacity: .85 }).addTo(planLayer);
-  else {
-    L.polyline(p.goLL, { color: T('--path-go'), weight: 5, opacity: .85, dashArray: '1 9', lineCap: 'round' }).addTo(planLayer);
-    L.polyline(p.backLL, { color: T('--path-back'), weight: 4, opacity: .7, dashArray: '1 9', lineCap: 'round' }).addTo(planLayer);
-    L.polyline(p.loopLL, { color: T('--accent'), weight: 6, opacity: .9 }).addTo(planLayer);
-    pin(p.loopStart, '✏️', '여기서 그리기 시작', 'var(--accent)', 'below').addTo(planLayer);
-  }
+  L.polyline(p.goLL, { color: T('--path-go'), weight: 5, opacity: .85, dashArray: '1 9', lineCap: 'round' }).addTo(planLayer);
+  L.polyline(p.backLL, { color: T('--path-back'), weight: 4, opacity: .7, dashArray: '1 9', lineCap: 'round' }).addTo(planLayer);
+  L.polyline(p.loopLL, { color: T('--accent'), weight: 6, opacity: .9 }).addTo(planLayer);
+  pin(p.loopStart, '✏️', '여기서 그리기 시작', 'var(--accent)', 'below').addTo(planLayer);
   // 도착 핀은 모양 위쪽 가장자리에 — 가운데에 두면 그릴 모양을 덮는다
   const topLat = Math.max(...p.tgtLL.map(q => q[0])), midLon = p.tgtLL.reduce((s, q) => s + q[1], 0) / p.tgtLL.length;
-  pin(legacy ? p.star : [topLat, midLon], emoji(p.shape), `${p.gold ? '반짝 ' : ''}${shapeName(p)} 그리는 곳`, p.gold ? 'var(--gold)' : 'var(--navy)', p.gold ? 'big gold' : 'big').addTo(planLayer);
+  pin([topLat, midLon], emoji(p.shape), `${p.gold ? '반짝 ' : ''}${shapeName(p)} 그리는 곳`, p.gold ? 'var(--gold)' : 'var(--navy)', p.gold ? 'big gold' : 'big').addTo(planLayer);
   matMarkers.clear();
   for (const m of p.mats || []) matMarkers.set(m.k, L.marker(m.ll, { icon: L.divIcon({ className: 'mpin t' + m.t, iconSize: null, html: '<div>단</div>' }) })
     .addTo(planLayer).bindTooltip(esc(`${m.n} · 시청 결제 ${esc(Number(m.v).toLocaleString())}건`)));
   const e = emoji(p.shape), n = esc(shapeName(p));
-  $('info').innerHTML = legacy
-    ? `<div class="ttl">${e} ${n} 산책 <span class="sub">왕복 ${p.totalKm} km</span></div>`
-    : `<div class="ttl">${p.gold ? '반짝 ' : ''}${e} ${n} 산책 <span class="sub">${p.dir}쪽 ${p.distKm} km</span></div>
+  $('info').innerHTML = `<div class="ttl">${p.gold ? '반짝 ' : ''}${e} ${n} 산책 <span class="sub">${p.dir}쪽 ${p.distKm} km</span></div>
        <div class="where">도착 <span id="place">${p.place ? esc(p.place) : '근처 이름을 찾는 중…'}</span></div>
        <ol class="steps">
          <li><i class="sw go"></i><span>✏️까지 가기</span><b>${p.goKm} km</b></li>
@@ -184,7 +179,7 @@ function drawPlan(p) {
     map.flyTo(m.ll, 17, { duration: 0.6 });
   };
   fit(L.polyline(p.fullLL).getBounds()); // 안내판을 채운 뒤 높이를 재서 맞춘다
-  if (!legacy && !p.place) placeName(p.center).then(({ label, dong, failed }) => {
+  if (!p.place) placeName(p.center).then(({ label, dong, failed }) => {
     if (plan !== p) return;
     if (failed) { const el = $('place'); if (el) el.textContent = '이름은 다음에 다시 찾아볼게요'; return; } // 저장하지 않으면 다음에 다시 부른다
     p.place = label ? label + ' 근처' : '이름 없는 골목'; p.dong = dong; store.set('plan', p);
