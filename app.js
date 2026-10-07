@@ -9,6 +9,8 @@ const store = {
   set(k, v) { try { localStorage.setItem('ws_' + k, JSON.stringify(v)); return true; } catch { status('폰 저장 공간에 쓰지 못했어요. 설정의 「기록 내보내기」로 백업해 두세요.'); return false; } },
 };
 const status = t => { $('status').textContent = t; };
+// 단추를 누른 결과·거절은 엄지 가까이 한 줄로도 — 위 띠는 멀다(디자이너 검토). 4초 뒤 사라진다
+function tell(t) { status(t); const h = $('hint'); h.textContent = t; h.hidden = false; clearTimeout(tell.timer); tell.timer = setTimeout(() => { h.hidden = true; }, 4000); }
 // 색은 index.html :root 토큰에서 읽는다(밤하늘에선 같은 이름이 남색 값으로 바뀐다)
 const T = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 // 툴팁·라벨·안내판은 HTML로 들어간다 — 가져온 기록 파일·파일 이름의 글이 코드로 실행되지 않게 바꿔 넣는다
@@ -80,17 +82,18 @@ const inSeoul = async (lat, lon) => {
 };
 function clearEnd() { if (endMarker) map.removeLayer(endMarker); end = endMarker = null; }
 async function setEnd(lat, lon) {
-  if (!(await inSeoul(lat, lon))) return status('서울 안에서만 고를 수 있어요.');
+  if (!(await inSeoul(lat, lon))) return tell('서울 안에서만 고를 수 있어요.');
   if (!start || plan || mode !== 'plan') return; // 기다리는 사이 출발 핀을 지웠거나 산책을 뽑았거나 밤하늘로 갔으면 그만
   clearEnd();
   const d = map.distance(start, [lat, lon]);
-  if (d < +store.get('radius', 1000) / 2) return status('출발점과 너무 가까워서 한 바퀴 돌아 출발점으로 돌아와요.');
+  if (d < +store.get('radius', 1000) / 2) return tell('출발점과 너무 가까워서 한 바퀴 돌아 출발점으로 돌아와요.');
   end = [lat, lon];
   const far = d > END_MAX_M;
   endMarker = pin(end, '', far ? '너무 멀어요' : '끝낼 곳', 'var(--path-back)', far ? 'below far' : 'below').addTo(map)
     .on('click', () => { clearEnd(); status('끝낼 곳을 지웠어요. 출발점으로 돌아오는 산책이에요.'); });
   endMarker.getElement()?.setAttribute('aria-label', '끝낼 곳 — 누르면 지워요');
   status(far ? '거기까지는 걸어가기엔 멀어요. 조금 더 가까운 곳을 눌러 주세요.' : '여기가 끝낼 곳이에요. 「산책 뽑기」를 누르세요. 끝낼 곳 표시를 다시 누르면 지워져요.');
+  fit(L.latLngBounds([start, end]), 40); // 끝 핀이 시트 가장자리에 걸리지 않게
 }
 map.on('click', e => {
   if (mode !== 'plan' || watchId != null) return;
@@ -175,14 +178,26 @@ function matListHtml(p) {
 // ---------- 산책 ----------
 function drawPlan(p) {
   planLayer.clearLayers();
-  $('sheet').classList.toggle('active', !!p);
+  $('sheet').classList.toggle('active', !!p); $('sheet').classList.remove('celebrate');
+  $('bPlan').classList.toggle('primary', !p); $('bWalk').classList.toggle('primary', !!p && watchId == null);
   if (!p) { $('info').innerHTML = ''; $('bDone').classList.remove('primary'); return; }
   L.polyline(p.tgtLL, { color: T('--path-back'), dashArray: '4 6', weight: 2 }).addTo(planLayer);
   L.polyline(p.goLL, { color: T('--path-go'), weight: 5, opacity: .85, dashArray: '1 9', lineCap: 'round' }).addTo(planLayer);
   L.polyline(p.backLL, { color: '#fff', weight: 8, opacity: .8 }).addTo(planLayer);
   L.polyline(p.backLL, { color: T('--path-back'), weight: 5, opacity: .9, dashArray: '2 8', lineCap: 'round' }).addTo(planLayer);
   L.polyline(p.loopLL, { color: T('--accent'), weight: 6, opacity: .9 }).addTo(planLayer);
-  pin(p.loopStart, '✏️', '그리기 시작점', 'var(--accent)', 'below').addTo(planLayer);
+  const bb = L.polyline(p.fullLL).getBounds(), sp = start || p.goLL[0];
+  const nearStart = map.distance(sp, p.loopStart) < map.distance(bb.getSouthWest(), bb.getNorthEast()) * 0.15; // 이름표가 「출발」에 가리던 일(지도 검토)
+  const ls = pin(p.loopStart, '✏️', '그리기 시작점', 'var(--accent)', nearStart ? '' : 'below').addTo(planLayer);
+  if (nearStart) ls.setZIndexOffset(900);
+  // 도는 방향: 모양 길의 15·40·65·90% 자리에 작은 화살표(걷는 순서 = loopLL 순서)
+  const LL = p.loopLL, cum = [0];
+  for (let i = 1; i < LL.length; i++) cum.push(cum[i - 1] + map.distance(LL[i - 1], LL[i]));
+  for (const f of [0.15, 0.4, 0.65, 0.9]) {
+    const i = Math.max(1, cum.findIndex(c => c >= f * cum[cum.length - 1])), a = LL[i - 1], b = LL[i];
+    const ang = Math.atan2(-(b[0] - a[0]), (b[1] - a[1]) * Math.cos(a[0] * Math.PI / 180)) * 180 / Math.PI;
+    L.marker([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], { icon: L.divIcon({ className: 'arrowwrap', iconSize: null, html: `<div class="arrow" style="transform:rotate(${ang.toFixed(0)}deg)"></div>` }), interactive: false }).addTo(planLayer);
+  }
   if (p.oneWay) pin(p.backLL[p.backLL.length - 1], '', '끝낼 곳', 'var(--path-back)', 'below').addTo(planLayer);
   // 도착 핀은 모양 위쪽 가장자리에 — 가운데에 두면 그릴 모양을 덮는다
   const topLat = Math.max(...p.tgtLL.map(q => q[0])), midLon = p.tgtLL.reduce((s, q) => s + q[1], 0) / p.tgtLL.length;
@@ -288,9 +303,10 @@ function stopWalk() {
   keepAwake(false);
   $('bWalk').lastChild.textContent = '걷기 시작'; $('bWalk').classList.remove('walking'); $('bSkip').hidden = true;
   $('status').setAttribute('aria-live', 'polite'); backAlert(false);
+  $('walkBar').hidden = true; if (plan) $('bWalk').classList.add('primary');
 }
 $('bWalk').onclick = () => {
-  if (watchId != null) { stopWalk(); return status('잠시 멈췄어요. 다시 누르면 이어서 기록해요.'); }
+  if (watchId != null) { stopWalk(); return tell('잠시 멈췄어요. 다시 누르면 이어서 기록해요.'); }
   if (!navigator.geolocation || !plan) return status('이 브라우저는 위치를 알려 주지 않아요.');
   meLayer.clearLayers();
   const prev = store.get('track', null);
@@ -313,6 +329,8 @@ $('bWalk').onclick = () => {
     $('bDone').disabled = false;
     const cov = Math.round(C.coverage(plan.loopLL, tr.pts, 20, 40, tr.skip) * 100);
     $('bDone').classList.toggle('primary', cov >= C.NEED * 100); // 별 조건을 채우면 「다녀왔어요」가 주 단추
+    $('walkBar').firstChild.style.width = Math.min(100, cov) + '%'; $('walkBar').classList.toggle('met', cov >= C.NEED * 100);
+    if (cov >= C.NEED * 100 && !marks.has('met')) { marks.add('met'); tell('별 조건을 채웠어요 — 더 걸으면 더 밝은 별이 돼요.'); say('별 조건을 채웠어요.'); }
     for (const m of [25, 50, 75]) if (cov >= m && !marks.has(m)) { marks.add(m); say(`모양 길 ${m}%를 지났어요.`); }
     if (!plan.backBy) return status(`걷는 중 · ${trackKm(tr.pts).toFixed(2)} km · 모양 길의 ${cov}%를 지났어요`);
     // 돌아갈 시각: 남은 분 ≤ 지금 자리→끝 곳 직선거리×1.3을 걷는 분이면 알린다(서버가 없어 앱을 켜 둔 동안만)
@@ -326,7 +344,7 @@ $('bWalk').onclick = () => {
     }
     status(left > 0 ? `지금 돌아가면 ${hm(plan.backBy)}에 맞춰요 · 모양 길 ${cov}%` : `${hm(plan.backBy)}이 지났어요 · 모양 길 ${cov}%`);
   }, err => { if (err.code === 1) { stopWalk(); status('위치 권한이 꺼져 있어요. 브라우저 설정에서 켜 주세요.'); } else status('위치를 받지 못하고 있어요. 하늘이 트인 곳으로 가 보세요.'); }, { enableHighAccuracy: true });
-  $('bWalk').lastChild.textContent = '잠깐 멈춤'; $('bWalk').classList.add('walking'); $('bSkip').hidden = false;
+  $('bWalk').lastChild.textContent = '잠깐 멈춤'; $('bWalk').classList.add('walking'); $('bWalk').classList.remove('primary'); $('bSkip').hidden = false; $('walkBar').hidden = false;
   setFold(true, false); // 걷는 동안엔 지도를 넓게
   status('기록을 시작했어요. 화면을 켜 둔 채 걸어 주세요. 메뉴는 아래 손잡이로 펼쳐요.');
 };
@@ -335,7 +353,7 @@ $('bDone').onclick = () => {
   if (!plan) return;
   const tr = store.get('track', null), mine = tr && tr.id === plan.id, pts = mine ? tr.pts : [], skip = mine ? tr.skip || [] : [];
   const cov = C.coverage(plan.loopLL, pts, 20, 40, skip), skipped = C.skippedFrac(plan.loopLL, skip);
-  if (cov < C.NEED) return status(`모양 길의 ${Math.round(cov * 100)}%를 지났어요${skipped ? '(못 가는 길은 빼고)' : ''}. 60%를 넘기면 별이 돼요.`);
+  if (cov < C.NEED) return tell(`별은 아직이에요. 모양 길 ${Math.round(cov * 100)}%${skipped ? '(못 가는 길은 빼고)' : ''} — 60%까지 ${Math.ceil((C.NEED - cov) * 100)}%만 더 걸어요. 끝내려면 「자세히」의 「이 산책 그만두기」.`);
   // 약속: 약속한 시각 15분 안에 걷기 시작했나 · 정각: 돌아갈 시각과 1분 안
   const kept = !!(plan.promise && mine && tr.t0 && Math.abs(tr.t0 - new Date(plan.promise).getTime()) <= 15 * 60000);
   const late = plan.backBy ? Math.round(-minutesUntil(plan.backBy) * 60) : null, ontime = late != null && Math.abs(late) <= 60 ? late : null;
@@ -345,6 +363,7 @@ $('bDone').onclick = () => {
   if ((watchId != null || cov < 0.9) && !confirm(`지금 끝내고 별을 받을까요? 모양 길 ${Math.round(cov * 100)}%예요${cov < 0.9 ? ' — 90%를 넘기면 1등성이 돼요' : ''}.`)) return;
   const before = stars.stars.slice(), firstOfKind = !before.some(x => x.shape === plan.shape && (plan.shape !== 'custom' || x.designId === plan.designId));
   const s = C.done(plan, walked, stars, { coverage: cov, walkedKm: +trackKm(pts).toFixed(2), skipped, kept, ontime });
+  if (skip.length) s.skipGrid = toSpots(skip);
   if (!store.set('stars', stars)) return; // 저장 실패 — 산책과 걸은 기록을 그대로 둔다
   store.set('walked', walked); store.set('plan', null); store.set('track', null);
   stopWalk(); plan = null; drawPlan(null); meLayer.clearLayers();
@@ -359,11 +378,16 @@ $('bDone').onclick = () => {
     (s.mats || []).length ? `단골집 도장 ${s.mats.length}곳` : '', firstOfKind ? '도감 「모양」 칸에 새로 올랐어요' : '',
     unlocked.length ? `업적: ${unlocked.map(a => esc(a.title)).join(' · ')}` : ''].filter(Boolean);
   const GR = ['', '가장 밝은 별', '밝은 별', '보통 별', '흐린 별', '아주 흐린 별'];
-  $('info').innerHTML = `<div class="cele">${emoji(s.shape)} ${esc(shapeName(s))} · ${s.grade}등성(${GR[s.grade]})</div>
-    <ul class="got">${notes.map(x => `<li>${x}</li>`).join('')}</ul>
-    <div class="row" style="margin-top:6px"><button id="bCard">작품 카드 만들기</button><button id="bDex2">도감 보기</button></div>${skip.length ? `
-    <div class="row" style="margin-top:6px"><button id="bReport">못 가는 길 민원 문구 복사</button></div><p class="note" style="margin-top:4px">서울시 응답소·안전신문고에 붙여 넣어요. 앱은 아무 데도 보내지 않아요.</p>` : ''}`;
-  if (skip.length) $('bReport').onclick = () => copyReport(skip);
+  $('info').innerHTML = `<div class="cele"><div class="bigstar${s.gold ? ' gold' : ''}" aria-hidden="true">★</div>
+      <div><b>${s.gold ? '반짝 별' : '별'}이 떴어요</b><br>${emoji(s.shape)} ${esc(shapeName(s))} · ${s.grade}등성(${GR[s.grade]})</div></div>
+    <div class="rule">${notes[0]}</div>
+    <div class="row" style="margin-top:8px"><button id="bSeeSky" class="primary">밤하늘에서 보기</button></div>
+    <div class="row links"><button class="link" id="bCard">작품 카드 만들기</button><button class="link" id="bDex2">도감 보기</button></div>
+    <details class="more"><summary>자세히</summary><ul class="got">${notes.slice(1).map(x => `<li>${x}</li>`).join('')}</ul>${skip.length ? `
+      <button type="button" id="bReport">못 가는 길 민원 문구 복사</button><p class="note" style="margin-top:4px">서울시 응답소·안전신문고에 붙여 넣어요. 앱은 아무 데도 보내지 않아요. 도감에서도 다시 복사할 수 있어요.</p>` : ''}</details>`;
+  if (skip.length) $('bReport').onclick = () => copyReport(s.skipGrid, s.date);
+  $('bSeeSky').onclick = () => $('bSky').click();
+  $('sheet').classList.add('celebrate'); $('hint').hidden = true;
   setFold(false, false);
   $('bCard').onclick = () => saveCard(s);
   $('bDex2').onclick = openDex;
@@ -401,6 +425,7 @@ function drawSky() {
   }
   S.forEach(s => {
     L.polyline(s.loopLL, { color: T('--star-line'), weight: 1, opacity: .45 }).addTo(skyLayer);
+    L.circleMarker(s.ll, { radius: 22, stroke: false, fillColor: s.gold ? T('--gold') : T('--star'), fillOpacity: .18, interactive: false }).addTo(skyLayer);
     L.circleMarker(s.ll, { radius: [0, 11, 8, 6, 4, 3][s.grade] || 3, color: s.gold ? T('--gold') : T('--star'), fillColor: s.gold ? T('--gold') : T('--star'), fillOpacity: 1, weight: s.gold ? 3 : 1 })
       .addTo(skyLayer).bindTooltip(esc(`${s.grade}등성 · ${shapeName(s)} · ${s.date} · 처음 걷는 길 ${s.newKm} km`));
     L.marker(s.ll, { icon: L.divIcon({ className: 'skyewrap', iconSize: null, html: `<div class="skye">${emoji(s.shape)}</div>` }), interactive: false }).addTo(skyLayer);
@@ -423,13 +448,16 @@ $('bSky').onclick = () => {
   if (mode === 'plan') {
     mode = 'sky'; document.documentElement.dataset.theme = 'dark';
     map.removeLayer(planLayer); map.removeLayer(meLayer); if (startMarker) map.removeLayer(startMarker); if (endMarker) map.removeLayer(endMarker); // 밤하늘엔 출발점·오가는 길을 그리지 않는다
-    setBase(store.get('base', 'osm'), true); skyLayer.addTo(map); drawSky(); $('bSky').lastChild.textContent = '산책으로';
+    map.setMaxZoom(14); // 밤하늘에선 동네 단위까지만 — 별 하나일 때 거리 이름까지 읽히던 일
+    setBase(store.get('base', 'osm'), true); skyLayer.addTo(map); drawSky(); $('bSky').lastChild.textContent = '산책으로'; $('bSky').setAttribute('aria-pressed', 'true');
+    $('sheet').classList.remove('celebrate');
     $('bPlan').disabled = $('bLoc').disabled = true; // 밤하늘에선 산책을 짜지 않는다(안 보이는 층에 그려진다)
     $('info').style.display = 'none';
   } else {
     mode = 'plan'; delete document.documentElement.dataset.theme;
     map.removeLayer(skyLayer); planLayer.addTo(map); meLayer.addTo(map); if (startMarker) startMarker.addTo(map); if (endMarker) endMarker.addTo(map);
-    setBase(store.get('base', 'osm'), false); $('bSky').lastChild.textContent = '밤하늘'; $('bPlan').disabled = $('bLoc').disabled = false;
+    map.setMaxZoom(19);
+    setBase(store.get('base', 'osm'), false); $('bSky').lastChild.textContent = '밤하늘'; $('bSky').setAttribute('aria-pressed', 'false'); $('bPlan').disabled = $('bLoc').disabled = false;
     $('info').style.display = '';
     status(plan ? '하던 산책이 있어요.' : '지도를 눌러 출발할 곳을 골라 주세요.');
   }
@@ -465,6 +493,7 @@ const okLL = a => Array.isArray(a) && a.length === 2 && a.every(isNum);
 const okMat = m => m && isStr(m.k, 300) && isStr(m.n) && isStr(m.a) && Number.isInteger(m.t) && Number.isInteger(m.v) && okLL(m.ll);
 const okStar = s => s && isStr(s.id, 40) && isStr(s.date, 6) && isStr(s.shape, 20) && okLL(s.ll) && Number.isInteger(s.grade) && s.grade >= 1 && s.grade <= 5
   && Array.isArray(s.loopLL) && s.loopLL.every(okLL) && (s.mats == null || (Array.isArray(s.mats) && s.mats.every(okMat)))
+  && (s.skipGrid == null || (Array.isArray(s.skipGrid) && s.skipGrid.length <= 50 && s.skipGrid.every(x => isStr(x, 30))))
   && (s.skipped == null || isNum(s.skipped)) && (s.ontime == null || isNum(s.ontime)) && (s.rule == null || Number.isInteger(s.rule)) && (s.kept == null || typeof s.kept === 'boolean')
   && (s.name == null || isStr(s.name, 20)) && (s.dong == null || isStr(s.dong, 40)) && (s.designId == null || isStr(s.designId, 40));
 const okDesign = d => d && isStr(d.id, 40) && isStr(d.name, 20) && Array.isArray(d.pts) && d.pts.length >= 4 && d.pts.length <= 80 && d.pts.every(okLL);
@@ -542,12 +571,14 @@ function suSvg(S) {
   for (let i = 0; i < 28; i++) {
     const b0 = 315 + i * step, b1 = b0 + step, [x0, y0] = pt(b0, R), [x1, y1] = pt(b1, R), [x2, y2] = pt(b1, r0), [x3, y3] = pt(b0, r0);
     const g = Math.floor(i / 7), on = f.has(i), cls = done[g] ? 'w done' : on ? 'w on' : 'w', { name } = K.suName(i);
-    w += `<path class="${cls}" d="M${x0},${y0} A${R},${R} 0 0 1 ${x1},${y1} L${x2},${y2} A${r0},${r0} 0 0 0 ${x3},${y3} Z"><title>${K.SU[g][0]} ${name}${on ? ` · 별 ${f.get(i)}개` : ''}</title></path>`;
+    w += `<path data-i="${i}" class="${cls}" d="M${x0},${y0} A${R},${R} 0 0 1 ${x1},${y1} L${x2},${y2} A${r0},${r0} 0 0 0 ${x3},${y3} Z"><title>${K.SU[g][0]} ${name}${on ? ` · 별 ${f.get(i)}개` : ''}</title></path>`;
     const [tx, ty] = pt(b0 + step / 2, (R + r0) / 2);
-    t += `<text x="${tx}" y="${ty}" class="${on || done[g] ? 'on' : ''}">${name.slice(2, 3)}</text>`;
+    t += `<text x="${tx}" y="${ty - 4}" class="${on || done[g] ? 'on' : ''}">${name.slice(2, 3)}</text><text x="${tx}" y="${ty + 9}" class="hg${on || done[g] ? ' on' : ''}">${name.slice(0, 1)}</text>`;
   }
   const q = K.SU.map(([, short], g) => { const [x, y] = pt(g * 90, r0 - 16); return `<text class="q" x="${x}" y="${y}">${short}${done[g] ? ' ✓' : ''}</text>`; }).join('');
-  return `<svg viewBox="0 0 320 320" role="img" aria-label="28수 성도: ${f.size}칸 채움">${w}${t}${q}<text x="${cx}" y="${cy - 8}">서울시청</text><text class="q" x="${cx}" y="${cy + 10}">${f.size} / 28수</text></svg>`;
+  const filled = [...f.keys()].sort((a, b) => a - b).map(i => { const n = K.suName(i); return `${n.group} ${n.name}수 별 ${f.get(i)}개`; });
+  $('suInfo').textContent = K.SU.map(([, short], g) => `${short} ${[0, 1, 2, 3, 4, 5, 6].filter(k => f.has(g * 7 + k)).length}/7`).join(' · ') + ' — 칸을 누르면 이름이 보여요';
+  return `<svg viewBox="0 0 320 320" role="img" aria-label="28수 둥근 판: 28칸 중 ${f.size}칸 채움${filled.length ? ' — ' + filled.join(', ') : ''}">${w}${t}${q}<text x="${cx}" y="${cy - 8}">서울시청</text><text class="q" x="${cx}" y="${cy + 10}">${f.size} / 28수</text></svg>`;
 }
 
 // ---------- 도감 ----------
@@ -565,7 +596,7 @@ function renderDex() {
   const cardHtml = (c, extra = '') => `<div class="card${c.got ? '' : ' locked'}${c.gold ? ' gold' : ''}">
       ${c.gold ? '<span class="tag">✨</span>' : ''}<div class="e">${c.emoji}</div>
       <div class="n">${esc(c.name)}</div>
-      <div class="m">${!c.got ? '아직이에요' : c.count ? `${c.count}번 · ${c.best}등성` : '안 걸었어요'}</div>${extra}</div>`; // 못 모은 칸도 흐린 그림·이름을 보여 줘 무엇을 모을지 알게 한다
+      <div class="m">${!c.got ? hintOf(c.key) : c.count ? `${c.count}번 · ${c.best}등성` : '안 걸었어요'}</div>${extra}</div>`; // 못 모은 칸도 흐린 그림·이름을 보여 줘 무엇을 모을지 알게 한다
   $('suRing').innerHTML = suSvg(S);
   $('dexBase').innerHTML = D.base.map(c => cardHtml(c, c.got ? `<button class="sub" data-card="${c.key}">작품 카드</button>` : '')).join('');
   const act = store.get('activeDesign', null);
@@ -573,10 +604,18 @@ function renderDex() {
     const id = c.key.slice(2);
     return cardHtml({ ...c, got: true }, `<button class="${id === act && store.get('pick', 'all') === 'custom' ? '' : 'sub'}" data-use="${id}">${id === act && store.get('pick', 'all') === 'custom' ? '✔ 다음 산책' : '이걸로 걷기'}</button>
       ${c.count ? `<button class="sub" data-card="${c.key}">작품 카드</button>` : ''}<button class="sub" data-del="${id}">지우기</button>`);
-  }).join('') : '<p style="font-size:13px;color:var(--sub)">아직 도안이 없어요. 손으로 그리거나 그림을 올려 보세요.</p>';
-  $('achList').innerHTML = A.map(a => `<div class="ach${a.ok ? '' : ' no'}"><div class="e">${a.emoji}</div>
-      <div class="t"><b>${esc(a.title)}</b> ${a.ok ? '<span class="ok">✓ 완료</span>' : ''}<br><span style="color:var(--sub)">${esc(a.desc)}</span>
-      ${a.ok ? '' : `<div class="bar" style="margin-top:4px"><i style="width:${pct(a.progress)}%"></i></div>`}</div></div>`).join('');
+  }).join('') : '<p style="grid-column:1/-1;padding:var(--space-sm);font-size:13px;color:var(--sub)">아직 도안이 없어요. 손으로 그리거나 그림을 올려 보세요.</p>';
+  const achRow = a => `<div class="ach${a.ok ? '' : ' no'}"><div class="e">${a.emoji}</div>
+      <div class="t"><b>${esc(a.title)}</b> ${a.ok ? '<span class="ok">✓ 완료</span>' : `<span class="pc">${pct(a.progress)}%</span>`}<br><span style="color:var(--sub)">${esc(a.desc)}</span>
+      ${a.ok ? '' : `<div class="bar" style="margin-top:4px" role="progressbar" aria-valuenow="${pct(a.progress)}" aria-valuemin="0" aria-valuemax="100" aria-label="${esc(a.title)} 진행"><i style="width:${pct(a.progress)}%"></i></div>`}</div></div>`;
+  const todo = A.filter(a => !a.ok).sort((x, y) => y.progress - x.progress), doneA = A.filter(a => a.ok);
+  $('achList').innerHTML = `<div class="achhead">지금 가까운 것</div>${todo.slice(0, 2).map(achRow).join('') || '<p class="note">모두 깼어요!</p>'}
+    ${todo.length > 2 ? `<details class="achmore"><summary>나머지 업적 ${todo.length - 2}개</summary>${todo.slice(2).map(achRow).join('')}</details>` : ''}
+    ${doneA.length ? `<details class="achmore"><summary>완료 ${doneA.length}개</summary>${doneA.map(achRow).join('')}</details>` : ''}`;
+  // D3 못 가는 길 기록: 별마다 뭉갠 자리 — 언제든 민원 문구로
+  const SK = S.filter(s => Array.isArray(s.skipGrid) && s.skipGrid.length);
+  $('skipList').innerHTML = SK.length ? SK.map(s => `<div class="mat"><span><b>${esc(shapeName(s))}</b> · 20${esc(s.date.slice(0, 2))}.${esc(s.date.slice(2, 4))}.${esc(s.date.slice(4, 6))}<br><small>${s.skipGrid.length}곳(약 50 m 단위)</small></span><button class="sub" data-rep="${esc(s.id)}">민원 문구 복사</button></div>`).join('')
+    : '<span style="font-size:13px;color:var(--sub)">걷다가 「못 가는 길」을 누르면 여기 남아요.</span>';
   const MS = K.matStamps(S);
   loadMat().then(all => {
     if (!all) return;
@@ -588,6 +627,7 @@ function renderDex() {
 }
 $('dDex').addEventListener('click', e => {
   const t = e.target.closest('button'); if (!t) return;
+  if (t.dataset.rep) { const st = store.get('stars', { stars: [] }).stars.find(x => x.id === t.dataset.rep); if (st && st.skipGrid) copyReport(st.skipGrid, st.date); }
   if (t.dataset.use) { store.set('activeDesign', t.dataset.use); store.set('pick', 'custom'); renderDex(); status('다음 산책은 이 도안으로 걸어요.'); }
   if (t.dataset.del && confirm('이 도안을 지울까요? 이미 받은 별은 남아요.')) { store.set('designs', designs().filter(d => d.id !== t.dataset.del)); renderDex(); }
   if (t.dataset.card) {
@@ -684,27 +724,28 @@ async function saveCard(s) {
 // ---------- 못 걷는 길: 지금 자리 둘레 60 m의 모양 길을 판정에서 뺀다(뺀 몫은 40%까지) ----------
 $('bSkip').onclick = () => {
   const tr = store.get('track', null);
-  if (!plan || !tr || tr.id !== plan.id || !tr.pts.length) return status('위치를 받은 뒤에 눌러 주세요.');
+  if (!plan || !tr || tr.id !== plan.id || !tr.pts.length) return tell('위치를 받은 뒤에 눌러 주세요.');
   const here = tr.pts[tr.pts.length - 1], skip = [...(tr.skip || []), here];
   const before = C.skippedFrac(plan.loopLL, tr.skip || []), after = C.skippedFrac(plan.loopLL, skip);
-  if (after === before) return status('여기는 모양 길에서 멀어요. 모양 길 위에서 눌러 주세요.');
+  if (after === before) return tell('여기는 모양 길에서 멀어요. 모양 길 위에서 눌러 주세요.');
   if (!(tr.skip || []).length && !confirm('이 근처 모양 길(약 50 m)을 별 판정에서 뺄까요?\n계단·막힌 길처럼 못 가는 곳에서 눌러 주세요. 길을 다시 짜 주지는 않아요.')) return;
-  if (after > C.SKIP_MAX) return status(before ? `모양 길의 ${Math.round(C.SKIP_MAX * 100)}%까지만 뺄 수 있어요. 다른 날 다시 걸어도 좋아요.`
+  if (after > C.SKIP_MAX) return tell(before ? `모양 길의 ${Math.round(C.SKIP_MAX * 100)}%까지만 뺄 수 있어요. 다른 날 다시 걸어도 좋아요.`
     : '이 근처는 모양 길이 여러 번 겹쳐 지나서 한 번에 너무 많이 빠져요. 조금 옮겨서 눌러 주세요.');
   tr.skip = skip; store.set('track', tr);
   L.marker(here, { icon: L.divIcon({ className: 'skipwrap', html: '<div class="skip">✕</div>', iconSize: null }), interactive: false }).addTo(meLayer);
-  status(`이 근처 모양 길을 판정에서 뺐어요 · 지금까지 ${Math.round(after * 100)}% 뺌. 다녀온 뒤 민원 문구를 복사할 수 있어요.`);
+  tell(`이 근처 모양 길을 판정에서 뺐어요 · 지금까지 ${Math.round(after * 100)}% 뺌. 다녀온 뒤 민원 문구를 복사할 수 있어요.`);
 };
 // 알림 문구: 자리는 약 50 m 단위로 뭉갠다. 앱은 어디로도 보내지 않는다 — 사용자가 직접 붙여 넣는다
 const grid = v => (Math.round(v / 0.0005) * 0.0005).toFixed(4);
-function reportText(skip) {
-  const spots = [...new Set(skip.map(([a, b]) => `위도 ${grid(a)}, 경도 ${grid(b)} 부근`))];
+const toSpots = skip => [...new Set(skip.map(([a, b]) => `${grid(a)},${grid(b)}`))];
+function reportText(spots0, date) {
+  const spots = spots0.map(x => { const [a, b] = x.split(','); return `위도 ${a}, 경도 ${b} 부근`; });
   return ['[보행 불편 구간 알림]', '아래 자리 부근은 걸어서 지나기 어려웠습니다. (계단·보도 끊김·어두움·공사 등 — 구체적인 사정을 덧붙여 주세요)',
-    ...spots.map(x => '- ' + x + ' (약 50 m 범위)'), `※ ${localDate()} 산책 기록에서 뽑음 · 위치는 약 50 m 단위로 뭉갬`].join('\n');
+    ...spots.map(x => '- ' + x + ' (약 50 m 범위)'), `※ ${date ? `20${date.slice(0, 2)}.${+date.slice(2, 4)}.${+date.slice(4, 6)}` : localDate()} 산책 기록에서 뽑음 · 위치는 약 50 m 단위로 뭉갬`].join('\n');
 }
 const localDate = (d = new Date()) => `${d.getFullYear()}.${d.getMonth() + 1}.${d.getDate()}`;
-async function copyReport(skip) {
-  const t = reportText(skip);
+async function copyReport(spots, date) {
+  const t = reportText(spots, date);
   try { await navigator.clipboard.writeText(t); status('문구를 복사했어요. 서울시 응답소나 안전신문고 같은 곳에 직접 붙여 넣어 보내 주세요. 앱은 아무 데도 보내지 않아요.'); }
   catch { prompt('이 문구를 복사해 직접 보내 주세요', t); }
 }
@@ -739,6 +780,13 @@ function quitPlan() {
 }
 
 const trPrev = plan && store.get('track', null);
+// 도감의 못 모은 모양 칸: 「아직이에요」 대신 얻는 길의 단서
+function hintOf(key) { return C.CATEGORY.geo.includes(key) ? '도형 · 짧게도 돼요' : C.CATEGORY.animal.includes(key) ? '동물 · 600 m 넘게' : C.CATEGORY.plant.includes(key) ? '식물 · 600 m 넘게' : '아직이에요'; }
+$('suRing').addEventListener('click', e => {
+  const el = e.target.closest('path[data-i]'); if (!el) return;
+  const i = +el.dataset.i, n = K.suName(i), c = K.suFilled(store.get('stars', { stars: [] }).stars).get(i) || 0;
+  $('suInfo').textContent = `${n.group} · ${n.name}수 · ${c ? `별 ${c}개` : '아직 비어 있어요'}`;
+});
 if (plan && trPrev && trPrev.id === plan.id && trPrev.pts.length) {
   drawPlan(plan);
   L.polyline(trPrev.pts, { color: T('--path-go'), weight: 4 }).addTo(meLayer);

@@ -121,6 +121,17 @@ button.icon{flex:0 0 50px}
 .tabs button{border:0;background:transparent;min-height:44px;font-size:14px;font-weight:400;color:var(--ink-2)}
 .tabs button:hover{background:transparent;color:var(--ink)}
 .tabs button+button{border-left:1px solid var(--line)}
+.tabs button[aria-pressed="true"]{box-shadow:inset 0 -3px 0 var(--accent);color:var(--ink);font-weight:700}
+.hint{max-width:520px;margin:6px auto 0;font-size:13px;color:var(--ink);background:var(--paper-2);padding:6px 8px}
+#walkBar{position:relative;height:6px;max-width:520px;margin:6px auto 0;background:oklch(40% 0.06 255)}
+#walkBar i{display:block;height:100%;width:0;background:var(--accent)}
+#walkBar.met i{background:var(--gold)}
+#walkBar::after{content:'';position:absolute;left:60%;top:-3px;bottom:-3px;width:2px;background:#fff}
+.arrowwrap{background:none;border:none}
+.arrow{width:0;height:0;margin:-6px 0 0 -5px;border-left:11px solid var(--accent);border-top:6px solid transparent;border-bottom:6px solid transparent;filter:drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff);transform-origin:5px 6px}
+#suRing text.hg{font-size:9px;font-weight:400;fill:var(--ink-2)}
+#suRing text.hg.on{fill:var(--on-accent)}
+#suRing path{cursor:pointer}
 
 #info{max-width:520px;margin:0 auto var(--space-sm);font-size:14px;color:var(--sub);line-height:1.55}
 #info:empty{display:none}
@@ -148,7 +159,14 @@ button.icon{flex:0 0 50px}
 #info .more summary{display:inline-flex;align-items:center;min-height:36px;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
 #info .got{margin:6px 0 0;padding-left:18px;font-size:13px;color:var(--ink);line-height:1.6}
 #sheet.active .unit,#sheet.active .seg,#sheet.active .lennote{display:none} /* 산책이 있는 동안엔 지도를 넓게 — 거리를 바꾸려면 「이 산책 그만두기」(10-08 디자이너 검토 뒤) */
-#info .cele{font-size:17px;color:var(--ink)}
+#info .cele{display:flex;gap:12px;align-items:center;font-size:16px;color:var(--ink)}
+.bigstar{font-size:44px;line-height:1;color:var(--star,gold);text-shadow:0 0 8px oklch(85% 0.15 90);animation:starIn .8s ease-out both}
+.bigstar.gold{color:var(--gold)}
+@keyframes starIn{from{opacity:0;transform:scale(.6)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.bigstar{animation:none}}
+#info .links{margin-top:2px;justify-content:center;gap:var(--space-lg)}
+#sheet.celebrate .r2{display:none}
+#sheet.celebrate #bPlan{background:var(--panel);color:var(--accent);border-color:var(--accent);font-size:15px;min-height:44px}
 #info .cele small{display:block;font-size:13px;font-weight:400;color:var(--sub);margin-top:2px}
 #info .row button{min-height:42px;font-size:14px}
 details.mats{margin-top:var(--space-xs)}
@@ -168,7 +186,7 @@ details.adv{margin-top:var(--space-lg);border-top:1px solid var(--line);padding-
 details.adv summary{cursor:pointer;font-size:14px;color:var(--ink-2)}
 
 /* 지도 위 */
-.night{filter:invert(1) hue-rotate(180deg) brightness(.45) contrast(.9)}
+.night{filter:invert(1) hue-rotate(180deg) brightness(.28) contrast(.75) saturate(.15)} /* 지도 기호·이름을 가라앉혀 별이 먼저 보이게(지도 검토) */
 .lbl{color:var(--star-line);font-size:14px;font-weight:700;white-space:nowrap;text-shadow:0 0 4px var(--sky)}
 .me{width:16px;height:16px;border-radius:50%;background:var(--accent);border:3px solid var(--paper);box-shadow:0 0 0 2px oklch(57% 0.21 264 / .3)}
 /* 핀: 각진 이름표 — 꼬리 끝이 그 지점 */
@@ -210,7 +228,11 @@ details.adv summary{cursor:pointer;font-size:14px;color:var(--ink-2)}
 .card .tag{position:absolute;top:4px;right:6px;font-size:11px;color:var(--tag);margin:0}
 .card button{min-height:40px;font-size:12px;font-weight:400;margin-top:6px;width:100%}
 .ach{display:flex;gap:var(--space-md);align-items:center;padding:var(--space-sm) 0;border-bottom:1px solid var(--line)}
-.ach .e{font-size:20px;width:28px;text-align:center}
+.ach .e{font-size:20px;width:28px;text-align:center;filter:grayscale(1) sepia(1) hue-rotate(185deg) saturate(2.5) brightness(.6)} /* D1: 업적 아이콘은 단색 남색으로(지도 핀·도감 모양은 그대로) */
+.ach .pc{font-size:12px;color:var(--sub);font-weight:400}
+.achhead{font-size:13px;font-weight:700;color:var(--ink);margin:4px 0}
+.achmore{margin-top:6px}
+.achmore summary{display:flex;align-items:center;min-height:40px;cursor:pointer;font-size:14px;color:var(--ink-2)}
 .ach.no .e{filter:grayscale(1);opacity:.35}
 .ach .t{flex:1;font-size:13px}.ach .t b{font-size:14px}
 .ach .ok{color:oklch(50% 0.14 145);font-weight:700}
@@ -241,7 +263,7 @@ details.adv summary{cursor:pointer;font-size:14px;color:var(--ink-2)}
   <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1L7 17M17 7l2.1-2.1"/></symbol>
 </svg>
 <div id="map"></div>
-<header id="top"><span class="wordmark">동네 별자리</span><div id="status" role="status">서울 골목을 걸으며 길 위에 모양을 그리면, 내 동네 밤하늘에 별이 하나 생겨요. 얼마나 걸을지 고르고 「산책 뽑기」를 누르세요. 다른 곳에서 출발하려면 지도를 먼저 누르면 돼요.</div></header>
+<header id="top"><span class="wordmark">동네 별자리</span><div id="walkBar" hidden><i></i></div><div id="status" role="status">서울 골목을 걸으며 길 위에 모양을 그리면, 내 동네 밤하늘에 별이 하나 생겨요. 얼마나 걸을지 고르고 「산책 뽑기」를 누르세요. 다른 곳에서 출발하려면 지도를 먼저 누르면 돼요.</div></header>
 <div id="sheet">
   <button id="fold" aria-expanded="true" aria-label="메뉴 접기"><span></span><em>메뉴 펼치기</em></button>
   <div id="info"></div>
@@ -258,6 +280,7 @@ details.adv summary{cursor:pointer;font-size:14px;color:var(--ink-2)}
     <button id="bSkip" hidden aria-label="못 가는 길 — 이 근처 모양 길을 별 판정에서 빼기">못 가는 길</button>
     <button id="bDone" disabled><svg class="i"><use href="#i-stamp"/></svg>다녀왔어요</button>
   </div>
+  <p id="hint" class="hint" role="alert" hidden></p>
   <div class="tabs">
     <button id="bSky"><svg class="i"><use href="#i-moon"/></svg><span>밤하늘</span></button>
     <button id="bDex"><svg class="i"><use href="#i-book"/></svg>도감</button>
@@ -313,6 +336,7 @@ details.adv summary{cursor:pointer;font-size:14px;color:var(--ink-2)}
     <div class="grid" id="dexBase"></div>
     <h4>28수 둥근 판<small>서울시청에서 본 방위로, 별이 뜬 자리가 그 칸을 채워요</small></h4>
     <div id="suRing"></div>
+    <p id="suInfo" class="note" style="text-align:center"></p>
     <p class="note">조선 천상열차분야지도의 28수를 서울에 옮긴 놀이용 배정이에요. 한 방위의 7수를 다 채우면 사신(청룡·현무·백호·주작) 도장을 받아요.</p>
     <h4>내 도안<small>직접 만든 모양으로 걸으면 도감에 내 칸이 생겨요</small></h4>
     <div class="row"><button type="button" id="bDraw" class="primary">손으로 그리기</button><button type="button" id="bUpload">그림 올리기</button></div>
@@ -326,6 +350,8 @@ details.adv summary{cursor:pointer;font-size:14px;color:var(--ink-2)}
       <div id="matList"></div>
       <p class="note">서울시청 본청이 업무추진비로 6건 넘게 결제한 가게예요. 맛을 보증하지 않아요. 표시는 결제 건수 기준 상위 5 %·20 %·그 밖으로 나눴어요.<br>자료: <a href="https://data.seoul.go.kr/dataList/OA-22156/S/1/datasetView.do" target="_blank" rel="noopener">서울특별시 본청 업무추진비 목록</a>(서울 열린데이터광장) · 공공누리 제1유형(출처표시) · 가게 이름·주소·결제 건수만 뽑아 가공함</p>
     </div>
+    <h4>못 가는 길 기록<small>걷다가 「못 가는 길」을 누른 자리(약 50 m 단위) — 민원 문구로 복사할 수 있어요</small></h4>
+    <div id="skipList"></div>
     <h4>동네 도장</h4>
     <div class="chips" id="stampList"></div>
     <div style="height:var(--space-md)"></div>
