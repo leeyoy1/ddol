@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b1020">
+<title>동네 별자리</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<!-- integrity: 외부 서버의 파일이 바뀌면 불러오지 않는다(10-07 계산) -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<style>
+:root{--bg:#f6f7fb;--panel:#ffffff;--ink:#14182b;--sub:#5b6478;--line:#e2e5ee;--accent:#e4572e;--star:#f5c542;--btn:#14182b;--btnink:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0b1020;--panel:#141a2e;--ink:#e8ecf6;--sub:#9aa3b8;--line:#262e48;--btn:#e8ecf6;--btnink:#0b1020}}
+:root[data-theme="dark"]{--bg:#0b1020;--panel:#141a2e;--ink:#e8ecf6;--sub:#9aa3b8;--line:#262e48;--btn:#e8ecf6;--btnink:#0b1020}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif}
+#map{position:fixed;inset:0}
+#status{position:fixed;z-index:1000;top:calc(env(safe-area-inset-top) + 10px);left:12px;right:12px;margin:auto;max-width:520px;
+  background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px 12px;font-size:14px;line-height:1.4;box-shadow:0 2px 10px rgba(0,0,0,.12)}
+#sheet{position:fixed;z-index:1000;left:0;right:0;bottom:0;padding:10px 12px calc(env(safe-area-inset-bottom) + 12px);
+  background:var(--panel);border-top:1px solid var(--line);border-radius:16px 16px 0 0;box-shadow:0 -2px 12px rgba(0,0,0,.12)}
+.row{display:flex;gap:8px;max-width:520px;margin:0 auto}
+.row+.row{margin-top:8px}
+button{flex:1;min-height:48px;border:0;border-radius:12px;background:var(--btn);color:var(--btnink);font-size:15px;font-weight:600}
+button.sub{background:transparent;color:var(--ink);border:1px solid var(--line)}
+button:disabled{opacity:.4}
+#info{max-width:520px;margin:0 auto 8px;font-size:14px;color:var(--sub);min-height:20px}
+dialog{border:1px solid var(--line);border-radius:14px;background:var(--panel);color:var(--ink);width:min(92vw,420px)}
+dialog label{display:block;margin:10px 0 4px;font-size:14px}
+dialog input,dialog select{width:100%;min-height:44px;font-size:16px;border:1px solid var(--line);border-radius:10px;padding:0 10px;background:var(--bg);color:var(--ink)}
+dialog p{font-size:13px;color:var(--sub);line-height:1.5}
+.night{filter:invert(1) hue-rotate(180deg) brightness(.45) contrast(.9)}
+.lbl{color:#c9d6ff;font-size:13px;white-space:nowrap;text-shadow:0 0 4px #000}
+.me{width:16px;height:16px;border-radius:50%;background:#2e86ab;border:3px solid #fff;box-shadow:0 0 0 2px rgba(46,134,171,.4)}
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div id="status">지도를 눌러 출발점을 정하거나, 「내 위치」를 누르세요. 출발점은 역·공원 같은 공공 장소를 권해요.</div>
+<div id="sheet">
+  <div id="info"></div>
+  <div class="row">
+    <button id="bLoc" class="sub">내 위치</button>
+    <button id="bPlan">원정 뽑기</button>
+  </div>
+  <div class="row">
+    <button id="bWalk" class="sub" disabled>걷기 시작</button>
+    <button id="bDone" class="sub" disabled>다녀왔어요</button>
+  </div>
+  <div class="row">
+    <button id="bSky" class="sub">밤하늘</button>
+    <button id="bGpx" class="sub" disabled>GPX 저장</button>
+    <button id="bSet" class="sub">설정</button>
+  </div>
+</div>
+<dialog id="dSet">
+  <form method="dialog">
+    <h3 style="margin:4px 0">설정</h3>
+    <label>반경(출발점에서 도착지까지)</label>
+    <select id="sRadius"><option value="1000">1 km</option><option value="1500">1.5 km</option><option value="2000" selected>2 km</option><option value="3000">3 km</option></select>
+    <label>모양 크기(지름)</label>
+    <select id="sSize"><option value="300">300 m</option><option value="400" selected>400 m</option><option value="600">600 m</option><option value="800">800 m</option></select>
+    <label>배경 지도</label>
+    <select id="sBase"><option value="osm">OpenStreetMap</option><option value="vw-Base">V-World 일반(국토교통부)</option><option value="vw-Satellite">V-World 위성</option><option value="vw-white">V-World 흰색</option></select>
+    <label>V-World 인증키</label>
+    <input id="sKey" autocomplete="off" placeholder="vworld.kr에서 발급한 키">
+    <p>V-World 키는 이 폰에만 저장돼요. 키를 발급할 때 등록한 서비스 주소에서만 지도가 열려요. 키가 없으면 OpenStreetMap을 써요.</p>
+    <label>기록</label>
+    <div class="row"><button type="button" id="bExport" class="sub">기록 내보내기</button><button type="button" id="bImport" class="sub">가져오기</button></div>
+    <input type="file" id="fImport" accept="application/json" hidden>
+    <div class="row" style="margin-top:14px"><button value="ok">닫기</button></div>
+  </form>
+</dialog>
+<script type="module" src="app.js"></script>
+</body>
+</html>

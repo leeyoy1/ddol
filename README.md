@@ -1,0 +1,14 @@
+# 동네 별자리 (ddol)
+
+걸을 때마다 동네 하늘에 별이 하나씩 생기는 산책 놀이. 서울 안의 출발점에서 반경 안의 무작위 지점까지 가서 그 자리에서 모양(별·하트·네모·세모·동그라미)을 그리고 돌아오면 별이 된다. 별 5개가 모이면 별자리가 된다.
+
+- 경로 계산은 폰 브라우저 안에서 한다. 서버가 없다.
+- 위치·걸은 길·별은 그 폰의 브라우저 저장소(localStorage)에만 남는다. 어디로도 보내지 않는다.
+- 원정 GPX 파일에는 출발점이 들어 있다. 남에게 보내지 않는다.
+- 배경 지도는 OpenStreetMap이고, 설정에서 V-World(국토교통부 공간정보 오픈플랫폼) 인증키를 넣으면 V-World 지도로 바꿀 수 있다.
+
+## 자료와 라이선스
+
+`tiles/`의 도로망은 © OpenStreetMap 기여자의 자료로 만든 것이다(BBBike 서울 추출본, 2026-10-04). 원 자료와 이 도로망 조각은 [Open Database License(ODbL) 1.0](https://opendatacommons.org/licenses/odbl/1-0/)을 따른다. 자세한 내용: https://www.openstreetmap.org/copyright
+
+지도 그리기: [Leaflet](https://leafletjs.com/) 1.9.4(BSD-2-Clause, 외부에서 불러오며 파일 지문 SRI로 고정).
