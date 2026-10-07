@@ -231,6 +231,7 @@ export function plan(G, proj, start, radius, size, seed, { pick = 'all', custom 
       fig ? { angles: FIGURE_ANGLES, scales: [0.9, 1.1], center: [n.x, n.y] } : { rots: 12, scales: [0.9, 1.1], center: [n.x, n.y] });
   }
   if (!best) throw new Error('여덟 번 뽑아도 모양을 그릴 자리가 없었어요');
+  const gold = R() < 1 / 12; // 반짝 원정(희귀) — 시드가 같으면 같다
   const go = shortest(G, s0, best.path[0]), back = shortest(G, best.path[best.path.length - 1], s0);
   const full = [...go, ...best.path.slice(1), ...back.slice(1)];
   const edgeLen = {};
@@ -252,7 +253,7 @@ export function plan(G, proj, start, radius, size, seed, { pick = 'all', custom 
   for (let i = 0; i + 1 < best.path.length; i++) { const a = G.nodes.get(best.path[i]), b = G.nodes.get(best.path[i + 1]); area += a.x * b.y - b.x * a.y; }
   return {
     id: new Date().toISOString().slice(2, 10).replaceAll('-', '') + '-' + seed, shape, seed,
-    customName: shape === 'custom' ? custom.name || '내 그림' : null,
+    customName: shape === 'custom' ? custom.name || '내 그림' : null, designId: shape === 'custom' ? custom.id || null : null, gold,
     star: ll(p), center: proj.ll(cx, cy).map(v => +v.toFixed(6)), loopStart: ll(best.path[0]),
     dir, distKm: +(Math.hypot(cx - st.x, cy - st.y) / 1000).toFixed(1), turn: area > 0 ? '반시계' : '시계',
     devM: +best.dev.toFixed(1), devRatio: +(best.dev / usedSize).toFixed(4), sizeM: Math.round(sz),
@@ -268,7 +269,8 @@ export function done(rec, walked, stars) {
   for (const [k, l] of Object.entries(rec.edgeLen)) { tot += l; if (!(k in walked)) nw += l; }
   const frac = tot ? nw / tot : 0;
   Object.assign(walked, rec.edgeLen);
-  const star = { id: rec.id, date: rec.id.slice(0, 6), shape: rec.shape, name: rec.customName || null, ll: rec.center || rec.star, loopLL: rec.loopLL,
+  const star = { id: rec.id, date: rec.id.slice(0, 6), shape: rec.shape, name: rec.customName || null, designId: rec.designId || null,
+    gold: !!rec.gold, dong: rec.dong || null, totalKm: rec.totalKm || 0, ll: rec.center || rec.star, loopLL: rec.loopLL,
     newKm: +(nw / 1000).toFixed(2), newFrac: +frac.toFixed(3), grade: grade(rec.devRatio, frac) };
   stars.stars.push(star);
   return star;

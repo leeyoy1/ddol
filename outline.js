@@ -124,8 +124,23 @@ export function outlineFromRGBA(data, w, h, { maxPts = 40 } = {}) {
   const c = traceContour(mask, w, h);
   const s = simplifyClosed(c, maxPts);
   if (!s || s.length < 4) throw new Error('윤곽이 너무 단순하거나 복잡해요'); // 세모 = 꼭짓점 3 + 닫는 점
+  return normalizeOutline(s);
+}
+
+// 화면 좌표 윤곽 → 단위 좌표(가운데 0, 긴 변 반지름 1). 화면 y는 아래쪽 → 뒤집는다
+export function normalizeOutline(s) {
   const xs = s.map(p => p[0]), ys = s.map(p => p[1]);
   const mx = (Math.max(...xs) + Math.min(...xs)) / 2, my = (Math.max(...ys) + Math.min(...ys)) / 2;
   const half = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) / 2 || 1;
-  return s.map(([x, y]) => [+((x - mx) / half).toFixed(3), +(-(y - my) / half).toFixed(3)]); // 화면 y는 아래쪽 → 뒤집는다
+  return s.map(([x, y]) => [+((x - mx) / half).toFixed(3), +(-(y - my) / half).toFixed(3)]);
+}
+
+// 손가락으로 그린 자국(열린 선, 화면 좌표) → 닫힌 단위 윤곽. 끝점을 첫 점에 이어 닫는다
+export function strokeToOutline(pts, { maxPts = 40 } = {}) {
+  const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+  const ext = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
+  if (pts.length < 3 || ext < 20) throw new Error('그림이 너무 작아요 — 칸을 크게 써서 그려 주세요');
+  const s = simplifyClosed([...pts, pts[0]], maxPts);
+  if (!s || s.length < 4) throw new Error('모양을 알아보지 못했어요 — 다시 그려 주세요');
+  return normalizeOutline(s);
 }

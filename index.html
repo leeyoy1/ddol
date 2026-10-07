@@ -62,6 +62,34 @@ dialog p{font-size:13px;color:var(--sub);line-height:1.5}
 .skye{position:absolute;transform:translate(-50%,-150%);font-size:16px;filter:drop-shadow(0 0 4px rgba(255,243,176,.8))}
 .glow{filter:drop-shadow(0 0 6px #fff3b0)}
 #cPrev{display:block;margin:8px auto 0;background:var(--bg);border:1px solid var(--line);border-radius:12px}
+.gold .pin,.pin.gold{border-color:#f5c542;background:linear-gradient(135deg,#fff8d6,#ffe9a8)}
+/* 도감 */
+#dDex{width:min(96vw,520px);max-height:88vh;padding:0}
+#dDex .in{padding:14px 14px 0;overflow:auto;max-height:calc(88vh - 70px)}
+#dDex h3{margin:4px 0 2px}
+#dDex h4{margin:16px 0 6px;font-size:15px}
+.bar{height:8px;border-radius:99px;background:var(--line);overflow:hidden}
+.bar i{display:block;height:100%;background:linear-gradient(90deg,#ff6b6b,#f5a623)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:8px}
+.card{border:1px solid var(--line);border-radius:14px;padding:8px 6px;text-align:center;background:var(--bg);position:relative}
+.card .e{font-size:30px;line-height:1.2}
+.card .n{font-size:13px;font-weight:700}
+.card .m{font-size:11px;color:var(--sub)}
+.card.locked .e{filter:grayscale(1) brightness(.6);opacity:.35}
+.card.gold{border-color:#f5c542;box-shadow:0 0 0 2px rgba(245,197,66,.35) inset}
+.card .tag{position:absolute;top:4px;right:6px;font-size:12px}
+.card button{min-height:32px;font-size:12px;margin-top:6px;border-radius:9px}
+.ach{display:flex;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
+.ach .e{font-size:26px;width:34px;text-align:center}
+.ach.no .e{filter:grayscale(1);opacity:.4}
+.ach .t{flex:1;font-size:13px}.ach .t b{font-size:14px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);border-radius:99px;padding:4px 10px;font-size:13px;background:var(--bg)}
+#pad{display:block;margin:6px auto;touch-action:none;background:#fff;border:2px dashed var(--line);border-radius:14px}
+.foot{position:sticky;bottom:0;display:flex;background:var(--panel);padding:10px 14px;border-top:1px solid var(--line)}
+#info .cele{font-size:15px;font-weight:800}
+#info .cele small{display:block;font-weight:600;color:var(--sub);margin-top:2px}
+#info .row button{min-height:40px;font-size:14px}
 </style>
 </head>
 <body>
@@ -79,7 +107,8 @@ dialog p{font-size:13px;color:var(--sub);line-height:1.5}
   </div>
   <div class="row">
     <button id="bSky" class="sub">밤하늘</button>
-    <button id="bGpx" class="sub" disabled>GPX 저장</button>
+    <button id="bDex" class="sub">도감</button>
+    <button id="bGpx" class="sub" disabled>GPX</button>
     <button id="bSet" class="sub">설정</button>
   </div>
 </div>
@@ -87,13 +116,8 @@ dialog p{font-size:13px;color:var(--sub);line-height:1.5}
   <form method="dialog">
     <h3 style="margin:4px 0">설정</h3>
     <label>무엇을 그릴까요</label>
-    <select id="sPick"><option value="all">전부 무작위 🎲</option><option value="geo">도형 ⭐💗🔺</option><option value="animal">동물 🐟🐱🐰🐳</option><option value="plant">식물 🌷🌸🌲🌵</option><option value="custom">내 그림 🖼️</option></select>
-    <label>내 그림</label>
-    <div class="row"><button type="button" id="bUpload" class="sub">그림 올리기</button></div>
-    <input type="file" id="fImg" accept="image/*" hidden>
-    <p id="customName">아직 올린 그림이 없어요</p>
-    <canvas id="cPrev" width="160" height="160" hidden></canvas>
-    <p>단색 바탕 위에 또렷한 그림이 잘 돼요. 그림 자체는 저장하지 않고 윤곽선만 이 폰에 남겨요. 동물·식물·내 그림은 알아볼 수 있게 지름을 600 m 이상으로 그려요.</p>
+    <select id="sPick"><option value="all">전부 무작위 🎲</option><option value="geo">도형 ⭐💗🔺</option><option value="animal">동물 🐟🐱🐰🐳</option><option value="plant">식물 🌷🌸🌲🌵</option><option value="custom">내 도안 ✍️ (도감에서 고른 것)</option></select>
+    <p>「내 도안」은 도감에서 직접 그리거나 그림을 올려 만들어요. 동물·식물·내 도안은 알아볼 수 있게 지름을 600 m 이상으로 그려요.</p>
     <label>반경(출발점에서 도착지까지)</label>
     <select id="sRadius"><option value="1000">1 km</option><option value="1500">1.5 km</option><option value="2000" selected>2 km</option><option value="3000">3 km</option></select>
     <label>모양 크기(지름)</label>
@@ -108,6 +132,35 @@ dialog p{font-size:13px;color:var(--sub);line-height:1.5}
     <input type="file" id="fImport" accept="application/json" hidden>
     <div class="row" style="margin-top:14px"><button value="ok">닫기</button></div>
   </form>
+</dialog>
+<dialog id="dDex">
+  <div class="in">
+    <h3>도감</h3>
+    <div id="dexSum"></div>
+    <h4>모양 도감</h4>
+    <div class="grid" id="dexBase"></div>
+    <h4>내 도안 <span style="font-weight:500;font-size:12px;color:var(--sub)">— 직접 만든 모양으로 걸으면 도감에 내 칸이 생겨요</span></h4>
+    <div class="row"><button type="button" id="bDraw">✍️ 손으로 그리기</button><button type="button" id="bUpload" class="sub">🖼️ 그림 올리기</button></div>
+    <input type="file" id="fImg" accept="image/*" hidden>
+    <p id="customName" style="font-size:13px;color:var(--sub)"></p>
+    <div class="grid" id="dexMine" style="margin-top:8px"></div>
+    <h4>업적</h4>
+    <div id="achList"></div>
+    <h4>동네 스탬프</h4>
+    <div class="chips" id="stampList"></div>
+    <div style="height:12px"></div>
+  </div>
+  <div class="foot"><button type="button" id="bDexClose">닫기</button></div>
+</dialog>
+<dialog id="dMake">
+  <h3 style="margin:4px 0">✍️ 내 도안 그리기</h3>
+  <p style="font-size:13px;color:var(--sub);margin:4px 0">한 번에 이어서 그리세요. 손을 떼면 끝점이 첫 점으로 이어져 닫혀요. 굵직한 모양일수록 길 위에서 잘 보여요.</p>
+  <canvas id="pad" width="300" height="300"></canvas>
+  <label style="font-size:14px">도안 이름</label>
+  <input id="mName" maxlength="20" placeholder="예: 우리 집 강아지" style="width:100%;min-height:44px;font-size:16px;border:1px solid var(--line);border-radius:10px;padding:0 10px;background:var(--bg);color:var(--ink)">
+  <p id="mMsg" style="font-size:13px;color:var(--sub);min-height:18px"></p>
+  <div class="row"><button type="button" id="mClear" class="sub">지우기</button><button type="button" id="mSave">도안 저장</button></div>
+  <div class="row"><button type="button" id="mClose" class="sub">닫기</button></div>
 </dialog>
 <script type="module" src="app.js"></script>
 </body>
