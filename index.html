@@ -95,6 +95,7 @@ button.link{flex:none;min-height:24px;border:0;background:none;padding:0 2px;fon
 .skipwrap{background:none;border:none}
 .skip{transform:translate(-50%,-50%);width:20px;height:20px;line-height:20px;text-align:center;font-weight:700;color:var(--paper);background:var(--ink-2)}
 #bSkip{flex:0 0 auto;padding-inline:10px;font-size:13px}
+[hidden]{display:none!important} /* button{display:inline-flex}가 hidden 속성을 덮어 「못 걷는 길」이 첫 화면에 보였다(10-08) */
 /* 밤하늘에서는 산책 단추를 숨기고 꼬리표만 */
 :root[data-theme="dark"] #sheet .seg,:root[data-theme="dark"] #sheet .unit,:root[data-theme="dark"] #sheet .r1,:root[data-theme="dark"] #sheet .r2{display:none}
 button.walking{border-color:var(--accent);color:var(--accent)}

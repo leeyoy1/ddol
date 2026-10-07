@@ -282,10 +282,12 @@ $('bWalk').onclick = () => {
   const line = L.polyline(prev && prev.id === plan.id ? prev.pts : [], { color: T('--path-go'), weight: 4 }).addTo(meLayer);
   const me = L.marker([0, 0], { icon: L.divIcon({ className: '', html: '<div class="me"></div>', iconSize: [16, 16] }) });
   keepAwake(true);
+  let first = true; // 첫 위치에서 내 자리로 다가간다 — 뽑을 때 맞춘 축척은 큰 안내판 때문에 멀리서 본 지도라 걷는 길이 안 보였다(10-08)
   watchId = navigator.geolocation.watchPosition(p => {
     if (p.coords.accuracy > 60) return; // 실내·지하에서 튀는 점은 버린다
     const ll = [p.coords.latitude, p.coords.longitude], tr = addPoint(ll);
     line.addLatLng(ll); me.setLatLng(ll).addTo(meLayer);
+    if (first) { first = false; map.setView(ll, Math.max(map.getZoom(), 17)); }
     $('bDone').disabled = false;
     const cov = Math.round(C.coverage(plan.loopLL, tr.pts, 20, 40, tr.skip) * 100);
     if (!plan.backBy) return status(`걷는 중 · ${trackKm(tr.pts).toFixed(2)} km · 모양 길의 ${cov}%를 지났어요`);
@@ -648,7 +650,8 @@ $('bSkip').onclick = () => {
   const here = tr.pts[tr.pts.length - 1], skip = [...(tr.skip || []), here];
   const before = C.skippedFrac(plan.loopLL, tr.skip || []), after = C.skippedFrac(plan.loopLL, skip);
   if (after === before) return status('여기는 모양 길에서 멀어요. 모양 길 위에서 눌러 주세요.');
-  if (after > C.SKIP_MAX) return status(`모양 길의 ${Math.round(C.SKIP_MAX * 100)}%까지만 뺄 수 있어요. 다른 날 다시 걸어도 좋아요.`);
+  if (after > C.SKIP_MAX) return status(before ? `모양 길의 ${Math.round(C.SKIP_MAX * 100)}%까지만 뺄 수 있어요. 다른 날 다시 걸어도 좋아요.`
+    : '이 근처는 모양 길이 여러 번 겹쳐 지나서 한 번에 너무 많이 빠져요. 조금 옮겨서 눌러 주세요.');
   tr.skip = skip; store.set('track', tr);
   L.marker(here, { icon: L.divIcon({ className: 'skipwrap', html: '<div class="skip">✕</div>', iconSize: null }), interactive: false }).addTo(meLayer);
   status(`이 근처 모양 길을 판정에서 뺐어요 · 지금까지 ${Math.round(after * 100)}% 뺌. 다녀온 뒤 알림 문구를 복사할 수 있어요.`);
