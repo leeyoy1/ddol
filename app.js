@@ -292,10 +292,26 @@ $('bGpx').onclick = () => {
 };
 
 // ---------- 밤하늘 ----------
+// 밤하늘 바탕: 서울시청에서 28수 경계 방향으로 뻗은 가는 선 + 네 방위의 사신 이름(별이 어느 칸에 뜰지 보인다)
+function drawSkyGrid() {
+  const [la0, lo0] = K.CENTER, k = Math.cos(la0 * Math.PI / 180), at = (b, km) => [la0 + km / 110.54 * Math.cos(b * Math.PI / 180), lo0 + km / (111.32 * k) * Math.sin(b * Math.PI / 180)];
+  for (let i = 0; i < 28; i++) {
+    const b = 315 + i * 360 / 28;
+    L.polyline([at(b, 0.4), at(b, 16)], { color: T('--star-line'), weight: i % 7 === 0 ? 1.4 : 0.6, opacity: i % 7 === 0 ? 0.5 : 0.22, interactive: false }).addTo(skyLayer);
+  }
+  // 폰은 가로가 좁아 동·서 이름을 더 안쪽에 둔다
+  K.SU.forEach(([, short], g) => L.marker(at(g * 90, g % 2 ? 2.2 : 4.5), { icon: L.divIcon({ className: 'lbl', html: short, iconSize: null }), interactive: false }).addTo(skyLayer));
+  L.marker(K.CENTER, { icon: L.divIcon({ className: 'lbl', html: '서울시청', iconSize: null }), interactive: false }).addTo(skyLayer);
+}
 function drawSky() {
   skyLayer.clearLayers();
+  drawSkyGrid();
   const st = store.get('stars', { stars: [], names: {} }), S = st.stars;
-  if (!S.length) return false;
+  if (!S.length) { // 별이 없어도 밤하늘은 연다 — 빈 하늘과 28칸 방위선을 보여 준다(10-08: 별 없을 때 눌러도 반응이 없어 보였다)
+    map.setView(K.CENTER, 11);
+    status('아직 별이 없어요. 산책을 다녀오면 서울시청에서 본 방향의 칸에 별이 떠요. 「산책으로」를 누르면 돌아가요.');
+    return false;
+  }
   S.forEach(s => {
     L.polyline(s.loopLL, { color: T('--star-line'), weight: 1, opacity: .45 }).addTo(skyLayer);
     L.circleMarker(s.ll, { radius: [0, 11, 8, 6, 4, 3][s.grade] || 3, color: s.gold ? T('--gold') : T('--star'), fillColor: s.gold ? T('--gold') : T('--star'), fillOpacity: 1, weight: s.gold ? 3 : 1 })
@@ -318,7 +334,6 @@ function drawSky() {
 }
 $('bSky').onclick = () => {
   if (mode === 'plan') {
-    if (!store.get('stars', { stars: [] }).stars.length) return status('아직 별이 없어요. 산책을 다녀오면 밤하늘에 별이 떠요.');
     mode = 'sky'; document.documentElement.dataset.theme = 'dark';
     map.removeLayer(planLayer); map.removeLayer(meLayer); if (startMarker) map.removeLayer(startMarker); // 밤하늘엔 출발점·오가는 길을 그리지 않는다
     setBase(store.get('base', 'osm'), true); skyLayer.addTo(map); drawSky(); $('bSky').lastChild.textContent = '산책으로';

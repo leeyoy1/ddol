@@ -84,6 +84,8 @@ svg.i{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-widt
 .seg button{min-height:36px;font-size:13px;font-weight:400;color:var(--ink-2)}
 .seg button[aria-pressed="true"]{border-color:var(--navy);color:var(--navy);font-weight:700;background:var(--paper-2)}
 #sheet.active .seg,#sheet.folded .seg{display:none}
+/* 밤하늘에서는 산책 단추를 숨기고 꼬리표만 */
+:root[data-theme="dark"] #sheet .seg,:root[data-theme="dark"] #sheet .r1,:root[data-theme="dark"] #sheet .r2{display:none}
 button.walking{border-color:var(--accent);color:var(--accent)}
 #fold:hover{background:transparent}
 #sheet.folded #info,#sheet.folded .r2,#sheet.folded .tabs{display:none}
