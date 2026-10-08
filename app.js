@@ -222,9 +222,10 @@ function drawPlan(p) {
          ${matListHtml(p)}
          <details class="promise"${p.promise ? ' open' : ''}><summary>나와 약속하기 — 이 시각에 걷기</summary><label>언제 걸을까요 <input type="datetime-local" id="promise" value="${esc(p.promise || '')}"></label>
            <small>나 혼자 하는 약속이에요(아무에게도 보내지 않아요). 그 시각 15분 안에 「걷기 시작」을 누르면 한 등급 밝은 별이 떠요. 못 지켜도 별은 그대로예요.</small></details>
+         <button type="button" class="link" id="bHomeLink">돌아갈 곳 방향 보기</button>
          <button type="button" class="link" id="bQuit">이 산책 그만두기</button>
        </details>`;
-  $('bQuit').onclick = quitPlan;
+  $('bQuit').onclick = quitPlan; $('bHomeLink').onclick = () => $('bHome').click();
   document.querySelector('#info .more').addEventListener('toggle', () => fit(L.polyline(p.fullLL).getBounds())); // 펼치고 접을 때 남은 지도에 길 전체가 들어오게(D5)
   $('bWalk').disabled = $('bGpx').disabled = false;
   $('bDone').disabled = !(store.get('track', null)?.id === p.id);
@@ -277,6 +278,7 @@ $('bPlan').onclick = async () => {
       custom: d && { id: d.id, name: d.name, pts: d.pts },
       nearLL: store.get('matRoute', 'off') === 'on' && mats ? mats.map(m => m.ll) : null });
     plan.mats = matsOnRoute(plan.fullLL);
+    plan.gold = todayGold().includes(K.suIndex(plan.center)); // 계산부의 무작위 반짝 대신 오늘의 반짝 칸
     if (minutes) { plan.minutes = minutes; plan.backBy = defaultBackBy(minutes); }
     warned = false; clearEnd(); // 끝 핀은 이제 산책 그림(planLayer)에 그린다
     store.set('plan', plan); store.set('track', null);
@@ -303,7 +305,7 @@ function stopWalk() {
   keepAwake(false);
   $('bWalk').lastChild.textContent = '걷기 시작'; $('bWalk').classList.remove('walking'); $('bSkip').hidden = true;
   $('status').setAttribute('aria-live', 'polite'); backAlert(false);
-  $('walkBar').hidden = true; if (plan) $('bWalk').classList.add('primary');
+  $('walkBar').hidden = true; if (plan) $('bWalk').classList.add('primary'); $('homeBar').hidden = true;
 }
 $('bWalk').onclick = () => {
   if (watchId != null) { stopWalk(); return tell('잠시 멈췄어요. 다시 누르면 이어서 기록해요.'); }
@@ -315,6 +317,7 @@ $('bWalk').onclick = () => {
   keepAwake(true);
   // 처음엔 내 자리로 다가가고, 그 뒤로는 따라간다(지도를 끌면 멈춤 — 오른쪽 아래 「내 위치로」로 다시)
   follow = true; let first = true, lastGood = Date.now(), acc = null; const marks = new Set();
+  let onLine = null, farSince = null; const corners = plan.tgtLL.length <= 12 ? plan.tgtLL : [], hit = new Set(); // 모퉁이는 도형(꼭짓점 12개 이하)만 센다
   $('status').setAttribute('aria-live', 'off'); // 위치마다 바뀌는 띠는 낭독하지 않고, 이정표만 따로 읽는다(접근성 검토)
   watchId = navigator.geolocation.watchPosition(p => {
     if (p.coords.accuracy > 60) { // 실내·지하에서 튀는 점은 버리되, 오래 못 받으면 말한다
@@ -332,6 +335,14 @@ $('bWalk').onclick = () => {
     $('walkBar').firstChild.style.width = Math.min(100, cov) + '%'; $('walkBar').classList.toggle('met', cov >= C.NEED * 100);
     if (cov >= C.NEED * 100 && !marks.has('met')) { marks.add('met'); tell('별 조건을 채웠어요 — 더 걸으면 더 밝은 별이 돼요.'); say('별 조건을 채웠어요.'); }
     for (const m of [25, 50, 75]) if (cov >= m && !marks.has(m)) { marks.add(m); say(`모양 길 ${m}%를 지났어요.`); }
+    // ① 화면 안 보고 걷기: 모양 길에 들어서면 한 번, 벗어나면 두 번(30·50 m 사이는 그대로 — 튀는 점에 떨지 않게), 모퉁이를 밟으면 길게
+    const dLoop = distTo(ll, plan.loopLL);
+    if (dLoop < 30 && onLine !== true) { if (onLine === false) cue('on'); onLine = true; }
+    else if (dLoop > 50 && onLine !== false) { if (onLine === true) cue('off'); onLine = false; }
+    corners.forEach((c, i) => { if (!hit.has(i) && map.distance(ll, c) < 30) { hit.add(i); cue('corner'); tell(`모퉁이 ${hit.size}/${corners.length}`); say(`모퉁이 ${hit.size}, ${corners.length}개 중.`); } });
+    // ② 산책 길(오가는 길 포함)에서 150 m 넘게 2분 넘게 떨어져 있으면 돌아갈 곳 쪽 큰 화살표
+    if (distTo(ll, plan.fullLL) > 150) { farSince = farSince || Date.now(); if (Date.now() - farSince > 120000 && $('homeBar').hidden) showHome(ll); }
+    else farSince = null;
     if (!plan.backBy) return status(`걷는 중 · ${trackKm(tr.pts).toFixed(2)} km · 모양 길의 ${cov}%를 지났어요`);
     // 돌아갈 시각: 남은 분 ≤ 지금 자리→끝 곳 직선거리×1.3을 걷는 분이면 알린다(서버가 없어 앱을 켜 둔 동안만)
     const left = minutesUntil(plan.backBy), need = map.distance(ll, plan.backLL[plan.backLL.length - 1]) * 1.3 / WALK_M_PER_MIN;
@@ -469,12 +480,12 @@ $('bSky').onclick = () => {
 $('bSet').onclick = () => {
   $('sRadius').value = store.get('radius', 1000); $('sSize').value = store.get('size', 400);
   $('sBase').value = store.get('base', 'osm'); $('sKey').value = store.get('vwkey', '');
-  $('sPick').value = store.get('pick', 'all'); $('sMat').value = store.get('matRoute', 'off'); $('sVib').value = store.get('vib', 'on');
+  $('sPick').value = store.get('pick', 'all'); $('sMat').value = store.get('matRoute', 'off'); $('sVib').value = store.get('vib', 'on'); $('sCue').value = store.get('cue', 'navigator' in self && navigator.vibrate ? 'vib' : 'off');
   $('dSet').showModal();
 };
 $('dSet').addEventListener('close', () => {
   store.set('radius', +$('sRadius').value); store.set('size', +$('sSize').value);
-  store.set('vwkey', $('sKey').value.trim()); store.set('base', $('sBase').value); store.set('pick', $('sPick').value); store.set('matRoute', $('sMat').value); store.set('vib', $('sVib').value);
+  store.set('vwkey', $('sKey').value.trim()); store.set('base', $('sBase').value); store.set('pick', $('sPick').value); store.set('matRoute', $('sMat').value); store.set('vib', $('sVib').value); store.set('cue', $('sCue').value);
   if ($('sBase').value.startsWith('vw-') && !$('sKey').value.trim()) status('V-World 키가 없어 OpenStreetMap으로 보여요');
   if ($('sPick').value === 'custom' && !activeDesign()) status('「내 도안」을 고르셨어요. 도감에서 도안을 먼저 만들어 주세요.');
   setBase(store.get('base', 'osm'), mode === 'sky');
@@ -572,7 +583,7 @@ function suSvg(S) {
   let w = '', t = '';
   for (let i = 0; i < 28; i++) {
     const b0 = 315 + i * step, b1 = b0 + step, [x0, y0] = pt(b0, R), [x1, y1] = pt(b1, R), [x2, y2] = pt(b1, r0), [x3, y3] = pt(b0, r0);
-    const g = Math.floor(i / 7), on = f.has(i), cls = done[g] ? 'w done' : on ? 'w on' : 'w', { name } = K.suName(i);
+    const g = Math.floor(i / 7), on = f.has(i), cls = (done[g] ? 'w done' : on ? 'w on' : 'w') + (todayGold().includes(i) ? ' gold' : ''), { name } = K.suName(i);
     w += `<path data-i="${i}" class="${cls}" d="M${x0},${y0} A${R},${R} 0 0 1 ${x1},${y1} L${x2},${y2} A${r0},${r0} 0 0 0 ${x3},${y3} Z"><title>${K.SU[g][0]} ${name}${on ? ` · 별 ${f.get(i)}개` : ''}</title></path>`;
     const [tx, ty] = pt(b0 + step / 2, (R + r0) / 2);
     t += `<text x="${tx}" y="${ty - 4}" class="${on || done[g] ? 'on' : ''}">${name.slice(2, 3)}</text><text x="${tx}" y="${ty + 9}" class="hg${on || done[g] ? ' on' : ''}">${name.slice(0, 1)}</text>`;
@@ -580,6 +591,7 @@ function suSvg(S) {
   const q = K.SU.map(([, short], g) => { const [x, y] = pt(g * 90, r0 - 16); return `<text class="q" x="${x}" y="${y}">${short}${done[g] ? ' ✓' : ''}</text>`; }).join('');
   const filled = [...f.keys()].sort((a, b) => a - b).map(i => { const n = K.suName(i); return `${n.group} ${n.name}수 별 ${f.get(i)}개`; });
   $('suInfo').textContent = K.SU.map(([, short], g) => `${short} ${[0, 1, 2, 3, 4, 5, 6].filter(k => f.has(g * 7 + k)).length}/7`).join(' · ') + ' — 칸을 누르면 이름이 보여요';
+  $('goldInfo').textContent = `오늘의 반짝 칸(금테): ${todayGold().map(i => { const n = K.suName(i); return `${n.group.slice(0, 2)} 「${n.name}수」`; }).join(' · ')} — 모양이 이 칸에 들면 반짝 별이에요. 날마다 바뀌어요.`;
   return `<svg viewBox="0 0 320 320" role="img" aria-label="28수 둥근 판: 28칸 중 ${f.size}칸 채움${filled.length ? ' — ' + filled.join(', ') : ''}">${w}${t}${q}<text x="${cx}" y="${cy - 8}">서울시청</text><text class="q" x="${cx}" y="${cy + 10}">${f.size} / 28수</text></svg>`;
 }
 
@@ -763,9 +775,52 @@ const syncH = () => { const s = document.documentElement.style; s.setProperty('-
 const ro = new ResizeObserver(syncH); ro.observe($('sheet')); ro.observe($('top'));
 if (!('vibrate' in navigator)) $('vibNote').hidden = false;
 $('alertBar').onclick = () => { $('alertBar').hidden = true; };
+$('homeBar').onclick = () => { $('homeBar').hidden = true; };
+$('bHome').onclick = () => { if (!lastLL) return tell('걷기를 시작하고 위치를 받은 뒤에 보여요.'); showHome(lastLL); };
 // 숨긴 낭독 칸: 이정표·경고만 읽는다(급하면 assertive 칸)
 function say(t, urgent = false) { const el = $(urgent ? 'srAlert' : 'srLive'); el.textContent = ''; setTimeout(() => { el.textContent = t; }, 50); }
 // 돌아갈 시각 경고: 위 띠 색 + 지도 위 배너(진동이 없는 폰에서도 보이게)
+// 점에서 선(위경도 점 배열)까지의 가장 가까운 거리(m) — 짧은 구간이라 평면으로 근사
+function distTo(ll, line) {
+  const k = Math.cos(ll[0] * Math.PI / 180) * 111320, P = ([a, b]) => [(b - ll[1]) * k, (a - ll[0]) * 110540];
+  let best = Infinity;
+  for (let i = 1; i < line.length; i++) {
+    const [ax, ay] = P(line[i - 1]), [bx, by] = P(line[i]), dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy;
+    const t = L2 ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / L2)) : 0;
+    best = Math.min(best, Math.hypot(ax + t * dx, ay + t * dy));
+  }
+  return best;
+}
+// 걷는 중 신호: 진동(안드로이드) 또는 짧은 소리(진동이 없는 아이폰) — 설정에서 끌 수 있다
+let audioCtx = null;
+function cue(kind) {
+  const how = store.get('cue', navigator.vibrate ? 'vib' : 'off');
+  if (how === 'vib' && navigator.vibrate) navigator.vibrate({ on: 80, off: [80, 80, 80], corner: 350 }[kind]);
+  else if (how === 'sound') {
+    try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      const beeps = { on: [[880, 0]], off: [[440, 0], [440, 0.18]], corner: [[660, 0], [990, 0.15]] }[kind];
+      for (const [f, at] of beeps) { const o = audioCtx.createOscillator(), g = audioCtx.createGain(); o.frequency.value = f; g.gain.value = 0.15; o.connect(g).connect(audioCtx.destination); o.start(audioCtx.currentTime + at); o.stop(audioCtx.currentTime + at + 0.12); }
+    } catch { /* 소리를 못 내는 브라우저는 그냥 간다 */ }
+  }
+}
+// ② 귀가 화살표: 지도 대신 돌아갈 곳 방향 하나와 거리만(지도 위쪽 = 북쪽)
+function showHome(ll) {
+  if (!plan) return;
+  const to = plan.backLL[plan.backLL.length - 1], km = map.distance(ll, to) / 1000;
+  const ang = Math.atan2((to[1] - ll[1]) * Math.cos(ll[0] * Math.PI / 180), to[0] - ll[0]) * 180 / Math.PI; // 북쪽 0°, 시계 방향
+  const dir = ['북', '북동', '동', '남동', '남', '남서', '서', '북서'][((Math.round(ang / 45) % 8) + 8) % 8];
+  $('homeArrow').style.transform = `rotate(${ang.toFixed(0)}deg)`;
+  $('homeText').textContent = `${plan.oneWay ? '끝낼 곳' : '출발점'}까지 ${km.toFixed(1)} km · ${dir}쪽(지도 위쪽이 북쪽)`;
+  $('homeBar').hidden = false;
+  say(`길에서 멀어졌어요. ${plan.oneWay ? '끝낼 곳' : '출발점'}은 ${dir}쪽 ${km.toFixed(1)} 킬로미터예요.`, true);
+}
+// ③ 오늘의 반짝 칸: 날짜(yymmdd)로 정하는 28수 세 칸(서로 다른 방위)
+function todayGold(d = new Date()) {
+  const s = String(d.getFullYear()) + (d.getMonth() + 1) + '-' + d.getDate();
+  let h = 2166136261; for (const ch of s) h = Math.imul(h ^ ch.charCodeAt(0), 16777619) >>> 0;
+  const i = h % 28; return [i, (i + 9) % 28, (i + 18) % 28];
+}
 function backAlert(on) {
   $('top').classList.toggle('alert', on); $('alertBar').hidden = !on;
   if (on && plan && plan.backBy) $('alertBar').textContent = `지금 돌아가면 ${hm(plan.backBy)}에 맞춰요 · 누르면 닫혀요`;

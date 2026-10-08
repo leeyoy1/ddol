@@ -149,7 +149,12 @@ button.primary:hover{background:var(--accent-hover)}
 #top.alert{background:oklch(52% 0.19 30)}
 #alertBar{position:fixed;z-index:1001;left:0;right:0;top:calc(var(--top-h, 60px));padding:14px var(--space-lg);background:oklch(52% 0.19 30);color:#fff;font-size:18px;font-weight:700;cursor:pointer}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
-:root[data-theme="dark"] .mapbtn,:root[data-theme="dark"] #alertBar{display:none}
+:root[data-theme="dark"] .mapbtn,:root[data-theme="dark"] #alertBar,:root[data-theme="dark"] #homeBar{display:none}
+#homeBar{position:fixed;z-index:1002;left:12px;right:12px;top:calc(var(--top-h, 60px) + 12px);padding:16px;background:var(--paper);border:2px solid var(--navy);text-align:center;cursor:pointer}
+#homeArrow{font-size:72px;line-height:1;font-weight:700;color:var(--navy);display:inline-block}
+#homeText{font-size:20px;font-weight:700;color:var(--ink);margin-top:6px}
+#homeBar small{display:block;font-size:13px;color:var(--sub);margin-top:4px}
+#suRing .w.gold{stroke:var(--gold);stroke-width:3}
 #info .more{margin-top:4px;font-size:12px;color:var(--sub)}
 #info .more summary::before,#info .promise summary::before{content:'▸ ';text-decoration:none}
 #info .more[open]>summary::before,#info .promise[open]>summary::before{content:'▾ '}
@@ -285,6 +290,8 @@ details.adv summary{cursor:pointer;font-size:14px;color:var(--ink-2)}
 </div>
 <button id="bLoc" class="mapbtn" aria-label="내 위치로"><svg class="i"><use href="#i-loc"/></svg></button>
 <div id="alertBar" hidden></div>
+<div id="homeBar" hidden role="dialog" aria-label="돌아갈 곳 방향"><div id="homeArrow" aria-hidden="true">↑</div><div id="homeText"></div><small>누르면 닫혀요</small></div>
+<button id="bHome" hidden></button>
 <div id="srLive" class="sr" aria-live="polite"></div><div id="srAlert" class="sr" aria-live="assertive"></div>
 <dialog id="dSet">
   <form method="dialog">
@@ -297,6 +304,8 @@ details.adv summary{cursor:pointer;font-size:14px;color:var(--ink-2)}
     </div>
     <label for="sVib">돌아갈 시각 알림 진동(분으로 볼 때)</label>
     <select id="sVib"><option value="on">켬</option><option value="off">끔</option></select>
+    <label for="sCue">걷는 중 신호(화면을 안 봐도 되게)</label>
+    <select id="sCue"><option value="vib">진동 — 모양 길에 들면 한 번, 벗어나면 두 번, 모퉁이는 길게</option><option value="sound">소리 — 같은 신호를 짧은 소리로(아이폰)</option><option value="off">끔</option></select>
     <p id="vibNote" hidden>이 폰(브라우저)은 진동 알림이 안 돼요. 맨 위 안내 글 색이 바뀌어 알려요.</p>
     <label>내 기록은 어디에</label>
     <p>걸은 길·별·도안은 이 폰의 브라우저에만 저장돼요. 서버로 보내지 않아요. 다만 지도 그림은 OpenStreetMap(또는 V-World)에서, 모양 그리는 곳과 끝낼 곳의 동네 이름은 OpenStreetMap에서 받아 오므로 그곳은 지금 보는 지역을 알 수 있어요. 브라우저 기록을 지우면 별도 사라지니 가끔 내보내 두세요.</p>
@@ -333,6 +342,7 @@ details.adv summary{cursor:pointer;font-size:14px;color:var(--ink-2)}
     <h4>28수 둥근 판<small>서울시청에서 본 방위로, 별이 뜬 자리가 그 칸을 채워요</small></h4>
     <div id="suRing"></div>
     <p id="suInfo" class="note" style="text-align:center"></p>
+    <p id="goldInfo" class="note"></p>
     <p class="note">조선 천상열차분야지도의 28수를 서울에 옮긴 놀이용 배정이에요. 한 방위의 7수를 다 채우면 사신(청룡·현무·백호·주작) 도장을 받아요.</p>
     <h4>내 도안<small>직접 만든 모양으로 걸으면 도감에 내 칸이 생겨요</small></h4>
     <div class="row"><button type="button" id="bDraw" class="primary">손으로 그리기</button><button type="button" id="bUpload">그림 올리기</button></div>
