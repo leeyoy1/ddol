@@ -1,5 +1,5 @@
 // 수집 — 도감·업적·동네 스탬프. 전부 별 기록(stars)에서 매번 계산한다(따로 저장한 값과 어긋날 일이 없게)
-import { CATEGORY, SHAPE_KO, EMOJI } from './core.js';
+import { CATEGORY, SHAPE_KO, EMOJI } from './core.js?v=2610090006';
 
 const sum = (S, k) => S.reduce((a, s) => a + (+s[k] || 0), 0);
 const kinds = S => new Set(S.map(s => s.shape));

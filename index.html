@@ -149,6 +149,7 @@ button.primary:hover{background:var(--accent-hover)}
 .lennote{max-width:520px;margin:0 auto var(--space-sm);font-size:12px;color:var(--sub)}
 .mapbtn{position:fixed;z-index:900;right:12px;bottom:calc(var(--sheet-h, 220px) + 12px);width:44px;height:44px;min-height:44px;padding:0;flex:none;background:var(--paper);border:1px solid var(--navy);border-radius:0;display:flex;align-items:center;justify-content:center}
 #top.alert{background:oklch(52% 0.19 30)}
+#updBar{position:fixed;z-index:1003;left:12px;right:12px;bottom:calc(var(--sheet-h, 220px) + 12px);min-height:48px;background:var(--navy);color:var(--on-accent);border:0;border-radius:0;font-size:16px;font-weight:700}
 #alertBar{position:fixed;z-index:1001;left:0;right:0;top:calc(var(--top-h, 60px));padding:14px var(--space-lg);background:oklch(52% 0.19 30);color:#fff;font-size:18px;font-weight:700;cursor:pointer}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 :root[data-theme="dark"] .mapbtn,:root[data-theme="dark"] #alertBar,:root[data-theme="dark"] #homeBar{display:none}
@@ -302,12 +303,13 @@ img.ico{width:1.2em;height:1.2em;display:inline-block;vertical-align:-.2em}
 <button id="bPeek" class="mapbtn" hidden aria-label="지도 잠깐 보기">지도</button>
 <button id="bLoc" class="mapbtn" aria-label="내 위치로"><svg class="i"><use href="#i-loc"/></svg></button>
 <div id="alertBar" hidden></div>
+<button id="updBar" hidden></button>
 <div id="homeBar" hidden role="dialog" aria-label="돌아갈 곳 방향"><div id="homeArrow" aria-hidden="true">↑</div><div id="homeText"></div><small>누르면 닫혀요</small></div>
 <button id="bHome" hidden></button>
 <div id="srLive" class="sr" aria-live="polite"></div><div id="srAlert" class="sr" aria-live="assertive"></div>
 <dialog id="dSet">
   <form method="dialog">
-    <h3 style="margin:0">설정</h3>
+    <h3 style="margin:0">설정 <small id="verInfo" style="font-weight:400;font-size:12px;color:var(--sub)"></small></h3>
     <label for="sPick">무엇을 그릴까요</label>
     <select id="sPick"><option value="all">아무거나</option><option value="geo">도형(별·하트·세모…)</option><option value="animal">동물(물고기·고양이·토끼·고래)</option><option value="plant">식물(잎·나무·튤립·꽃·선인장)</option><option value="custom">내 도안(도감에서 고른 것)</option></select>
     <div id="matSet" hidden>
@@ -391,6 +393,6 @@ img.ico{width:1.2em;height:1.2em;display:inline-block;vertical-align:-.2em}
   <div class="row"><button type="button" id="mClear">지우기</button><button type="button" id="mSave" class="primary">도안 저장</button></div>
   <div class="row"><button type="button" id="mClose">닫기</button></div>
 </dialog>
-<script type="module" src="app.js"></script>
+<script type="module" src="app.js?v=2610090006"></script>
 </body>
 </html>

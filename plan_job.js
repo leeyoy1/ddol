@@ -1,6 +1,6 @@
 // 원정 한 판 짜기 — 도로망 조각을 불러와 그래프를 만들고 core.plan을 돌린다.
 // 작업자(plan_worker.js)와, 작업자를 못 쓰는 브라우저의 화면 쪽에서 똑같이 쓴다.
-import * as C from './core.js';
+import * as C from './core.js?v=2610090006';
 
 let INDEX = null;
 const cache = new Map(); // 조각 캐시 — 최근 16개만(출발점을 여러 번 옮겨도 메모리가 쌓이지 않게)

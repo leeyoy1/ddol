@@ -1,7 +1,7 @@
 // 동네 별자리 — 폰 화면. 계산은 core.js, 그림 윤곽은 outline.js, 도로망은 tiles/ (make_tiles.py 산출)
-import * as C from './core.js';
-import { outlineFromRGBA, strokeToOutline } from './outline.js';
-import * as K from './collect.js';
+import * as C from './core.js?v=2610090006';
+import { outlineFromRGBA, strokeToOutline } from './outline.js?v=2610090006';
+import * as K from './collect.js?v=2610090006';
 
 const $ = id => document.getElementById(id);
 const store = {
@@ -131,13 +131,13 @@ map.on('dragstart', () => { if (watchId != null) follow = false; }); // 손으�
 
 // ---------- 산책 계산: 작업자에서(화면이 굳지 않게). 작업자를 못 쓰는 브라우저는 화면 쪽에서 같은 코드로 ----------
 let worker = null;
-try { worker = new Worker('plan_worker.js', { type: 'module' }); } catch { worker = null; }
+try { worker = new Worker('plan_worker.js?v=2610090006', { type: 'module' }); } catch { worker = null; }
 const onTiles = (n, total) => { if (total > 4) status(`길을 받는 중이에요 (${n}/${total})`); }; // 편도는 조각이 9개까지 — 오래 걸리면 고장으로 보인다
 function planAsync(params) {
-  if (!worker) return import('./plan_job.js').then(m => m.runPlan(params, onTiles));
+  if (!worker) return import('./plan_job.js?v=2610090006').then(m => m.runPlan(params, onTiles));
   return new Promise((ok, bad) => {
     worker.onmessage = e => e.data.progress ? onTiles(...e.data.progress) : e.data.ok ? ok(e.data.plan) : bad(new Error(e.data.msg));
-    worker.onerror = () => { worker = null; import('./plan_job.js').then(m => m.runPlan(params, onTiles)).then(ok, bad); };
+    worker.onerror = () => { worker = null; import('./plan_job.js?v=2610090006').then(m => m.runPlan(params, onTiles)).then(ok, bad); };
     worker.postMessage(params);
   });
 }
@@ -820,6 +820,20 @@ const syncH = () => { const s = document.documentElement.style; s.setProperty('-
 const ro = new ResizeObserver(syncH); ro.observe($('sheet')); ro.observe($('top'));
 if (!('vibrate' in navigator)) $('vibNote').hidden = false;
 $('alertBar').onclick = () => { $('alertBar').hidden = true; };
+// 새 판 알림: 배포할 때 tools/deploy_ddol.py가 VERSION과 version.json을 같은 값으로 찍는다(원본에선 'dev' — 확인하지 않는다).
+// 폰(특히 홈 화면에 추가한 앱)은 예전 판을 오래 붙잡는다 — 앱을 열거나 다시 볼 때 확인하고, 누르면 새 주소로 다시 열어 캐시를 건너뛴다
+const VERSION = '2610090006';
+async function checkVersion() {
+  if (VERSION === 'dev' || watchId != null) return; // 걷는 중엔 방해하지 않는다
+  try {
+    const { v } = await (await fetch('version.json', { cache: 'no-store' })).json();
+    if (v && v !== VERSION) { $('updBar').textContent = '새 판이 나왔어요 — 눌러서 새로 고침'; $('updBar').dataset.v = v; $('updBar').hidden = false; }
+  } catch { /* 오프라인이면 다음에 */ }
+}
+$('updBar').onclick = () => location.replace(location.pathname + '?v=' + encodeURIComponent($('updBar').dataset.v || Date.now()));
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkVersion(); });
+checkVersion();
+$('verInfo').textContent = `판 ${VERSION}`;
 $('homeBar').onclick = () => { $('homeBar').hidden = true; };
 $('bHome').onclick = () => { if (!lastLL) return tell('걷기를 시작하고 위치를 받은 뒤에 보여요.'); showHome(lastLL); };
 // 숨긴 낭독 칸: 이정표·경고만 읽는다(급하면 assertive 칸)
