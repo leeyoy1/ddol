@@ -211,6 +211,7 @@ label.memo input{width:20px;height:20px;flex:none}
 .mpin{background:none;border:none}
 .mpin div{position:absolute;transform:translate(-50%,-50%);width:22px;height:22px;background:var(--paper);border:1.5px solid var(--navy);
   display:flex;align-items:center;justify-content:center;font:700 11px var(--font-body);color:var(--navy)}
+.mpin.model div{border-color:var(--gold);border-width:2px}
 .mpin.t3 div{background:var(--navy);color:var(--on-accent)}
 /* 밤하늘 */
 .skyewrap{background:none;border:none}
@@ -364,6 +365,11 @@ img.ico{width:1.2em;height:1.2em;display:inline-block;vertical-align:-.2em}
       <h4>시청 단골집 도장<small>산책 길 60 m 안에서 지나간 곳</small></h4>
       <div id="matList"></div>
       <p class="note">서울시청 본청이 업무추진비로 6건 넘게 결제한 가게예요. 맛을 보증하지 않아요. 표시는 결제 건수 기준 상위 5 %·20 %·그 밖으로 나눴어요.<br>자료: <a href="https://data.seoul.go.kr/dataList/OA-22156/S/1/datasetView.do" target="_blank" rel="noopener">서울특별시 본청 업무추진비 목록</a>(서울 열린데이터광장) · 공공누리 제1유형(출처표시) · 가게 이름·주소·결제 건수만 뽑아 가공함</p>
+    </div>
+    <div id="modelDex" hidden>
+      <h4>구 모범음식점 도장<small>동네(행정동)별 — 내가 지난 곳 / 그 동의 모범음식점</small></h4>
+      <div id="modelList"></div>
+      <p class="note">구청이 위생·서비스 수준으로 지정한 「모범음식점」이에요. 맛을 보증하지 않아요. 동대문구는 자료를 못 찾아 빠졌어요.<br>자료: 서울 자치구 모범음식점 지정 현황(<a href="https://data.seoul.go.kr/" target="_blank" rel="noopener">서울 열린데이터광장</a>) · 가게 이름·주소·동·주된 음식만 뽑아 위치를 붙임</p>
     </div>
     <h4>못 가는 길 기록<small>걷다가 「못 가는 길」을 누른 자리(약 50 m 단위) — 민원 문구로 복사할 수 있어요</small></h4>
     <div id="skipList"></div>

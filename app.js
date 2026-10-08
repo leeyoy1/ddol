@@ -155,28 +155,40 @@ async function loadMat() {
   $('matSet').hidden = $('matDex').hidden = !MAT;
   return MAT;
 }
-// 경로 점(위경도) 60 m 안의 맛집
-function matsOnRoute(ll) {
-  if (!MAT || !ll.length) return [];
+// 경로 점(위경도) 60 m 안의 가게
+function nearRoute(list, ll) {
+  if (!list || !ll.length) return [];
   const k = Math.cos(ll[0][0] * Math.PI / 180) * 111320, R2 = 60 * 60;
   const lats = ll.map(p => p[0]), lons = ll.map(p => p[1]);
   const bb = [Math.min(...lats) - 0.001, Math.max(...lats) + 0.001, Math.min(...lons) - 0.001, Math.max(...lons) + 0.001];
-  return MAT.filter(m => m.ll[0] > bb[0] && m.ll[0] < bb[1] && m.ll[1] > bb[2] && m.ll[1] < bb[3])
-    .filter(m => ll.some(([a, b]) => ((a - m.ll[0]) * 110540) ** 2 + ((b - m.ll[1]) * k) ** 2 < R2))
-    .map(m => ({ k: m.n + '|' + m.a, n: m.n, a: m.a, t: m.t, v: m.v, ll: m.ll }));
+  return list.filter(m => m.ll[0] > bb[0] && m.ll[0] < bb[1] && m.ll[1] > bb[2] && m.ll[1] < bb[3])
+    .filter(m => ll.some(([a, b]) => ((a - m.ll[0]) * 110540) ** 2 + ((b - m.ll[1]) * k) ** 2 < R2));
 }
+const matsOnRoute = ll => nearRoute(MAT, ll).map(m => ({ k: m.n + '|' + m.a, n: m.n, a: m.a, t: m.t, v: m.v, ll: m.ll }));
+// ---------- 구 모범음식점 (model.json · model_build.py 산출, 없으면 숨는다) — 구청이 위생·서비스로 지정한 곳, 맛 보증 아님 ----------
+let MODEL = undefined;
+async function loadModel() {
+  if (MODEL !== undefined) return MODEL;
+  try { const r = await fetch('model.json'); MODEL = r.ok ? (await r.json()).places : null; } catch { MODEL = null; }
+  $('modelDex').hidden = !MODEL;
+  return MODEL;
+}
+const modelsOnRoute = ll => nearRoute(MODEL, ll).map(m => ({ k: 'M|' + m.n + '|' + m.a, n: m.n, a: m.a, gu: m.gu, dong: m.dong || '', food: m.food || '', ll: m.ll }));
 
 // 길 위 단골집: 출발해서 몇 km쯤에 지나는지(경로 점 누적 거리) 순서로
 const matMarkers = new Map();
 function matListHtml(p) {
-  const ms = p.mats || [];
+  return matRows(p, p.mats || [], '길 위 시청 단골집', m => `결제 ${esc(Number(m.v).toLocaleString())}건${TIER_TXT[m.t] ? ' · ' + TIER_TXT[m.t] : ''}`)
+    + matRows(p, p.models || [], '길 위 구 모범음식점', m => esc([m.food, m.dong].filter(Boolean).join(' · ')));
+}
+function matRows(p, ms, title, sub) {
   if (!ms.length) return '';
   const cum = [0];
   for (let i = 1; i < p.fullLL.length; i++) cum.push(cum[i - 1] + map.distance(p.fullLL[i - 1], p.fullLL[i]));
   const at = m => { let bi = 0, bd = Infinity; p.fullLL.forEach((q, i) => { const d = map.distance(q, m.ll); if (d < bd) { bd = d; bi = i; } }); return cum[bi] / 1000; };
   const rows = ms.map(m => ({ m, km: at(m) })).sort((a, b) => a.km - b.km);
-  return `<details class="mats"><summary>길 위 시청 단골집 ${ms.length}곳</summary>${rows.map(({ m, km }) =>
-    `<button class="matrow" data-mat="${esc(m.k)}"><span><b>${esc(m.n)}</b><br><small>${esc(m.a)}</small></span><small>출발 후 ${km.toFixed(1)} km<br>결제 ${esc(Number(m.v).toLocaleString())}건${TIER_TXT[m.t] ? ' · ' + TIER_TXT[m.t] : ''}</small></button>`).join('')}</details>`;
+  return `<details class="mats"><summary>${title} ${ms.length}곳</summary>${rows.map(({ m, km }) =>
+    `<button class="matrow" data-mat="${esc(m.k)}"><span><b>${esc(m.n)}</b><br><small>${esc(m.a)}</small></span><small>출발 후 ${km.toFixed(1)} km<br>${sub(m)}</small></button>`).join('')}</details>`;
 }
 
 // ---------- 산책 ----------
@@ -209,6 +221,8 @@ function drawPlan(p) {
   matMarkers.clear();
   for (const m of p.mats || []) matMarkers.set(m.k, L.marker(m.ll, { icon: L.divIcon({ className: 'mpin t' + m.t, iconSize: null, html: '<div>단</div>' }) })
     .addTo(planLayer).bindTooltip(esc(`${m.n} · 시청 결제 ${esc(Number(m.v).toLocaleString())}건`)));
+  for (const m of p.models || []) matMarkers.set(m.k, L.marker(m.ll, { icon: L.divIcon({ className: 'mpin model', iconSize: null, html: '<div>모</div>' }) })
+    .addTo(planLayer).bindTooltip(esc(`${m.n} · ${m.gu} 모범음식점${m.food ? ' · ' + m.food : ''}`)));
   const e = shapeIco(p.shape), n = esc(shapeName(p));
   $('info').innerHTML = `<div class="ttl">${p.gold ? '반짝 ' : ''}${e} ${n} 산책 <span class="sub">출발점에서 ${p.dir}쪽 ${p.distKm} km</span></div>
        <ol class="steps">
@@ -239,7 +253,7 @@ function drawPlan(p) {
   $('bDone').disabled = !(store.get('track', null)?.id === p.id);
   // 가게를 누르면 목록을 접고(지도를 가리지 않게) 그 가게로 간다
   for (const b of document.querySelectorAll('[data-mat]')) b.onclick = () => {
-    const m = (p.mats || []).find(x => x.k === b.dataset.mat); if (!m) return;
+    const m = (p.mats || []).concat(p.models || []).find(x => x.k === b.dataset.mat); if (!m) return;
     b.closest('details').open = false;
     map.once('moveend', () => matMarkers.get(m.k)?.openTooltip());
     map.flyTo(m.ll, 17, { duration: 0.6 });
@@ -275,7 +289,7 @@ $('bPlan').onclick = async () => {
     const radius = +store.get('radius', 1000), size = +store.get('size', 400);
     const pick = radius <= 500 && store.get('pick', 'all') === 'all' ? 'geo' : store.get('pick', 'all'); // 짧게: 동물·식물은 600 m 넘게 그려야 해서 도형으로
     status('동네 길을 불러오는 중…');
-    const d = activeDesign(), mats = await loadMat();
+    const d = activeDesign(), mats = await loadMat(); await loadModel();
     status('어디로 갈지 고르는 중…');
     const L0 = lens()[curLen()], minutes = store.get('unit', 'km') === 'min' && L0 ? L0.min : null;
     // 다시 뽑을 때도 끝낼 곳을 잇는다 — 끝 핀은 뽑은 뒤 지워지므로 지금 산책의 끝 마디에서(새로 고침 뒤에도)
@@ -285,7 +299,7 @@ $('bPlan').onclick = async () => {
       maxTotalKm: minutes ? minutes * WALK_M_PER_MIN / 1000 * 1.2 : null, radius, size, pick, seed: Math.floor(Math.random() * 1e6),
       custom: d && { id: d.id, name: d.name, pts: d.pts },
       nearLL: store.get('matRoute', 'off') === 'on' && mats ? mats.map(m => m.ll) : null });
-    plan.mats = matsOnRoute(plan.fullLL);
+    plan.mats = matsOnRoute(plan.fullLL); plan.models = modelsOnRoute(plan.fullLL);
     plan.gold = todayGold().includes(K.suIndex(plan.center)); // 계산부의 무작위 반짝 대신 오늘의 반짝 칸
     if (minutes) { plan.minutes = minutes; plan.backBy = defaultBackBy(minutes); }
     warned = false; clearEnd(); // 끝 핀은 이제 산책 그림(planLayer)에 그린다
@@ -395,7 +409,7 @@ $('bDone').onclick = () => {
   const notes = [`모양 길의 ${Math.round(cov * 100)}%를 걸었어요${skipped ? ` (못 가는 길 ${Math.round(skipped * 100)}%는 빼고 셌어요)` : ''}`,
     `서울시청에서 본 ${DIR[su.group]} 칸 「${su.name}수」${suNew ? '를 처음 채웠어요 — 도감 「28수 둥근 판」에 칠해져요' : '에 별이 하나 더 떴어요'}`,
     kept ? '약속한 시각에 걸어서 한 등급 더 밝아요' : '', ontime != null ? `돌아갈 시각에 딱 맞춰 왔어요(${Math.abs(ontime)}초 ${ontime > 0 ? '늦게' : ontime < 0 ? '일찍' : '차이 없이'})` : '',
-    s.memo ? '지도 없이 외워서 그렸어요 — 「외워 그린 별」' : '', (s.mats || []).length ? `단골집 도장 ${s.mats.length}곳` : '', firstOfKind ? '도감 「모양」 칸에 새로 올랐어요' : '',
+    s.memo ? '지도 없이 외워서 그렸어요 — 「외워 그린 별」' : '', (s.mats || []).length ? `단골집 도장 ${s.mats.length}곳` : '', (s.models || []).length ? `모범음식점 도장 ${s.models.length}곳(${[...new Set(s.models.map(m => m.dong).filter(Boolean))].map(esc).join('·')})` : '', firstOfKind ? '도감 「모양」 칸에 새로 올랐어요' : '',
     unlocked.length ? `업적: ${unlocked.map(a => esc(a.title)).join(' · ')}` : ''].filter(Boolean);
   const GR = ['', '가장 밝은 별', '밝은 별', '보통 별', '흐린 별', '아주 흐린 별'];
   $('info').innerHTML = `<div class="cele"><div class="bigstar${s.gold ? ' gold' : ''}" aria-hidden="true">★</div>
@@ -514,8 +528,9 @@ const isStr = (v, max = 200) => typeof v === 'string' && v.length <= max;
 const isNum = v => typeof v === 'number' && Number.isFinite(v);
 const okLL = a => Array.isArray(a) && a.length === 2 && a.every(isNum);
 const okMat = m => m && isStr(m.k, 300) && isStr(m.n) && isStr(m.a) && Number.isInteger(m.t) && Number.isInteger(m.v) && okLL(m.ll);
+const okModel = m => m && isStr(m.k, 400) && isStr(m.n) && isStr(m.a) && isStr(m.gu, 10) && isStr(m.dong || '', 30) && isStr(m.food || '', 60);
 const okStar = s => s && isStr(s.id, 40) && isStr(s.date, 6) && isStr(s.shape, 20) && okLL(s.ll) && Number.isInteger(s.grade) && s.grade >= 1 && s.grade <= 5
-  && Array.isArray(s.loopLL) && s.loopLL.every(okLL) && (s.mats == null || (Array.isArray(s.mats) && s.mats.every(okMat)))
+  && Array.isArray(s.loopLL) && s.loopLL.every(okLL) && (s.mats == null || (Array.isArray(s.mats) && s.mats.every(okMat))) && (s.models == null || (Array.isArray(s.models) && s.models.length <= 200 && s.models.every(okModel)))
   && (s.skipGrid == null || (Array.isArray(s.skipGrid) && s.skipGrid.length <= 50 && s.skipGrid.every(x => isStr(x, 30))))
   && (s.skipped == null || isNum(s.skipped)) && (s.ontime == null || isNum(s.ontime)) && (s.rule == null || Number.isInteger(s.rule)) && (s.kept == null || typeof s.kept === 'boolean') && (s.memo == null || typeof s.memo === 'boolean')
   && (s.name == null || isStr(s.name, 20)) && (s.dong == null || isStr(s.dong, 40)) && (s.designId == null || isStr(s.designId, 40));
@@ -613,7 +628,7 @@ $('bDexClose').onclick = () => $('dDex').close();
 
 function renderDex() {
   const S = store.get('stars', { stars: [], names: {} }).stars, D = K.dex(S, designs()), ST = K.stamps(S);
-  const A = K.achievements(S).filter(a => MAT || !a.id.startsWith('mat')); // 단골집 자료가 없는 판에선 깰 수 없는 업적을 숨긴다
+  const A = K.achievements(S).filter(a => (MAT || !a.id.startsWith('mat')) && (MODEL || !a.id.startsWith('model'))); // 단골집 자료가 없는 판에선 깰 수 없는 업적을 숨긴다
   const okA = A.filter(a => a.ok).length;
   $('dexSum').innerHTML = `<div style="font-size:14px;margin:6px 0 4px">모양 ${D.got}/${D.total} · 업적 ${okA}/${A.length} · 동네 도장 ${ST.length}곳 · 내 도안 ${designs().length}개</div>
     <div class="bar"><i style="width:${pct(D.got / D.total)}%"></i></div>`;
@@ -640,6 +655,15 @@ function renderDex() {
   const SK = S.filter(s => Array.isArray(s.skipGrid) && s.skipGrid.length);
   $('skipList').innerHTML = SK.length ? SK.map(s => `<div class="mat"><span><b>${esc(shapeName(s))}</b> · 20${esc(s.date.slice(0, 2))}.${esc(s.date.slice(2, 4))}.${esc(s.date.slice(4, 6))}<br><small>${s.skipGrid.length}곳(약 50 m 단위)</small></span><button class="sub" data-rep="${esc(s.id)}">민원 문구 복사</button></div>`).join('')
     : '<span style="font-size:13px;color:var(--sub)">걷다가 「못 가는 길」을 누르면 여기 남아요.</span>';
+  loadModel().then(all => {
+    if (!all) return;
+    const MD = K.modelStamps(S), by = new Map();
+    for (const m of MD) { const g = `${m.gu} ${m.dong || '동 모름'}`; by.set(g, (by.get(g) || 0) + 1); }
+    const totalBy = new Map(); for (const m of all) { const g = `${m.gu} ${m.dong || '동 모름'}`; totalBy.set(g, (totalBy.get(g) || 0) + 1); }
+    $('modelList').innerHTML = `<div style="font-size:13px;margin-bottom:4px">${MD.length} / ${all.length}곳 · ${by.size}개 동</div>`
+      + ([...by.entries()].sort((a, b) => b[1] - a[1]).map(([g, n]) => `<span class="chip">🏅 ${esc(g)} ${n}/${Math.max(n, totalBy.get(g) || 0)}</span>`).join('')
+        || '<span style="font-size:13px;color:var(--sub)">산책 길 60 m 안에서 지나가면 그 동네 칸에 도장이 찍혀요.</span>');
+  });
   const MS = K.matStamps(S);
   loadMat().then(all => {
     if (!all) return;
@@ -905,5 +929,5 @@ if (plan && trPrev && trPrev.id === plan.id && trPrev.pts.length) {
 } else if (plan) { drawPlan(plan); status(plan.promise ? `약속한 산책이 있어요 · ${promiseText(plan.promise)}. 그때 「걷기 시작」을 눌러 주세요.` : '하던 산책이 있어요. 「걷기 시작」으로 이어서 걸어요.'); }
 syncH(); // 처음 한 번은 바로(관찰 콜백은 그리기 단계에서야 온다)
 if (plan) setTimeout(() => plan && fit(L.polyline(plan.fullLL).getBounds()), 400); // 다시 열 때는 글꼴·시트 높이가 자리 잡은 뒤 한 번 더 맞춘다
-loadMat(); // 단골집 자료가 있으면 설정·도감에 그 칸을 보인다
+loadMat(); loadModel(); // 단골집·모범음식점 자료가 있으면 설정·도감에 그 칸을 보인다
 window.__app = { setStart, C, outlineFromRGBA, map, addPoint, get plan() { return plan; } }; // 점검용

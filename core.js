@@ -386,7 +386,7 @@ export function done(rec, walked, stars, { coverage: cov = null, walkedKm = null
   const frac = tot ? nw / tot : 0;
   Object.assign(walked, rec.edgeLen);
   const star = { id: rec.id, date: rec.id.slice(0, 6), shape: rec.shape, name: rec.customName || null, designId: rec.designId || null,
-    gold: !!rec.gold, dong: rec.dong || null, mats: rec.mats || [], totalKm: rec.totalKm || 0, ll: rec.center || rec.star, loopLL: rec.loopLL,
+    gold: !!rec.gold, dong: rec.dong || null, mats: rec.mats || [], models: (rec.models || []).map(({ k, n, a, gu, dong, food }) => ({ k, n, a, gu, dong, food })), totalKm: rec.totalKm || 0, ll: rec.center || rec.star, loopLL: rec.loopLL,
     newKm: +(nw / 1000).toFixed(2), newFrac: +frac.toFixed(3), grade: cov == null ? grade(rec.devRatio, frac) : Math.max(1, gradeByCoverage(cov, frac) - (kept ? 1 : 0)),
     coverage: cov == null ? null : +cov.toFixed(2), walkedKm };
   if (cov != null) Object.assign(star, { rule: RULE_V, skipped: +skipped.toFixed(2), kept: !!kept, ontime });

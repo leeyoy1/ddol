@@ -31,6 +31,14 @@ export function matStamps(S) {
   return [...m.values()].sort((a, b) => b.t - a.t || b.v - a.v);
 }
 
+// 구 모범음식점 도장: 산책 길 60 m 안에서 지나간 곳(별 기록의 models) — 동네(행정동)별로 센다
+export function modelStamps(S) {
+  const m = new Map();
+  for (const s of S) for (const x of s.models || []) { const e = m.get(x.k) || { ...x, times: 0 }; e.times++; m.set(x.k, e); }
+  return [...m.values()];
+}
+const modelDongs = S => new Set(modelStamps(S).filter(m => m.dong).map(m => m.gu + ' ' + m.dong)).size;
+
 // ---------- 28수(宿) 분야 ----------
 // 천상열차분야지도의 28수를 서울에 옮긴 놀이용 배정: 서울시청에서 본 방위를 28칸으로 나눈다(실제 분야설 재현이 아니다).
 // 북(315°~45°) 현무 · 동(45°~135°) 청룡 · 남(135°~225°) 주작 · 서(225°~315°) 백호, 각 7수를 시계 방향으로
@@ -82,6 +90,8 @@ const RULES = [
   ['access', '🚧', '못 가는 길 알리기', '못 가는 길을 판정에서 빼고 다녀오기', S => S.some(s => s.skipped > 0) ? 1 : 0],
   ['mat1', '🍽️', '시청 단골집', '산책 길에 시청 단골집 지나가기', S => Math.min(1, matStamps(S).length)],
   ['mat10', '🥢', '단골집 탐방', '시청 단골집 도장 10곳 받기', S => Math.min(1, matStamps(S).length / 10)],
+  ['model1', '🏅', '모범음식점', '산책 길에 구청 지정 모범음식점 지나가기', S => Math.min(1, modelStamps(S).length)],
+  ['modelDong5', '🗂️', '동네 모범 도장판', '서로 다른 다섯 동에서 모범음식점 도장 받기', S => Math.min(1, modelDongs(S) / 5)],
   ['matTop', '👑', '최고 단골집', '결제 건수 상위 5%인 단골집 지나가기', S => matStamps(S).some(m => m.t === 3) ? 1 : 0],
 ];
 
