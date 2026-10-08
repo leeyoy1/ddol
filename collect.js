@@ -78,6 +78,7 @@ const RULES = [
   ['su28', '🗺️', '서울 천상열차분야지도', '28수를 모두 채우기', S => suFilled(S).size / 28],
   ['kept', '🤝', '약속 지킴', '약속한 시각에 산책 다녀오기', S => S.some(s => s.kept) ? 1 : 0],
   ['ontime', '⏱️', '정각 도착', '돌아갈 시각 1분 안에 「다녀왔어요」 누르기', S => S.some(s => s.ontime != null) ? 1 : 0],
+  ['memo1', '🧠', '외워 그린 별', '지도를 가린 채 끝까지 걸어 별 받기(「지도 없이 걷기」)', S => S.some(s => s.memo) ? 1 : 0],
   ['access', '🚧', '못 가는 길 알리기', '못 가는 길을 판정에서 빼고 다녀오기', S => S.some(s => s.skipped > 0) ? 1 : 0],
   ['mat1', '🍽️', '시청 단골집', '산책 길에 시청 단골집 지나가기', S => Math.min(1, matStamps(S).length)],
   ['mat10', '🥢', '단골집 탐방', '시청 단골집 도장 10곳 받기', S => Math.min(1, matStamps(S).length / 10)],

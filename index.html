@@ -189,6 +189,12 @@ details.adv summary{cursor:pointer;font-size:14px;color:var(--ink-2)}
 /* 지도 위 */
 .night{filter:invert(1) hue-rotate(180deg) brightness(.28) contrast(.75) saturate(.15)} /* 지도 기호·이름을 가라앉혀 별이 먼저 보이게(지도 검토) */
 .lbl{color:var(--star-line);font-size:14px;font-weight:700;white-space:nowrap;text-shadow:0 0 4px var(--sky)}
+#bPeek{bottom:calc(var(--sheet-h, 220px) + 68px);font-size:13px;font-weight:600;color:var(--navy)}
+body.memo #map .leaflet-tile-pane,body.memo #map .leaflet-overlay-pane,body.memo #map .leaflet-marker-pane,body.memo #map .leaflet-shadow-pane{visibility:hidden}
+body.memo #map::after{content:'지도 없이 걷는 중 — 진동·소리를 따라가요';position:absolute;inset:0;display:flex;align-items:flex-start;justify-content:center;padding:calc(var(--top-h, 60px) + 48px) 24px 0;text-align:center;color:var(--sub);font-size:15px;z-index:400;pointer-events:none}
+label.memo{display:flex;gap:8px;align-items:center;font-size:14px;margin:6px 0;min-height:44px}
+label.memo input{width:20px;height:20px;flex:none}
+.me.ghost{background:var(--gold);opacity:.85}
 .me{width:16px;height:16px;border-radius:50%;background:var(--accent);border:3px solid var(--paper);box-shadow:0 0 0 2px oklch(57% 0.21 264 / .3)}
 /* 핀: 각진 이름표 — 꼬리 끝이 그 지점 */
 .pinwrap{background:none;border:none}
@@ -290,6 +296,7 @@ img.ico{width:1.2em;height:1.2em;display:inline-block;vertical-align:-.2em}
     <button id="bSet"><svg class="i"><use href="#i-gear"/></svg>설정</button>
   </div>
 </div>
+<button id="bPeek" class="mapbtn" hidden aria-label="지도 잠깐 보기">지도</button>
 <button id="bLoc" class="mapbtn" aria-label="내 위치로"><svg class="i"><use href="#i-loc"/></svg></button>
 <div id="alertBar" hidden></div>
 <div id="homeBar" hidden role="dialog" aria-label="돌아갈 곳 방향"><div id="homeArrow" aria-hidden="true">↑</div><div id="homeText"></div><small>누르면 닫혀요</small></div>
