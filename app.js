@@ -459,7 +459,9 @@ $('bSky').onclick = () => {
     map.setMaxZoom(19);
     setBase(store.get('base', 'osm'), false); $('bSky').lastChild.textContent = '밤하늘'; $('bSky').setAttribute('aria-pressed', 'false'); $('bPlan').disabled = $('bLoc').disabled = false;
     $('info').style.display = '';
-    status(plan ? '하던 산책이 있어요.' : '지도를 눌러 출발할 곳을 골라 주세요.');
+    // 돌아오면 새 화면으로 — 별 받은 축하 화면이 그대로 다시 떠서 「밤하늘에서 보기」와 오가며 뒤로 가는 것처럼 보였다(10-08 사용자 보고)
+    if (plan) { drawPlan(plan); status('하던 산책이 있어요.'); }
+    else { drawPlan(null); status(start ? '「산책 뽑기」를 누르면 같은 출발점에서 새 산책을 뽑아요. 다른 곳에서 하려면 출발 깃발을 눌러 지우세요.' : '지도를 눌러 출발할 곳을 골라 주세요.'); }
   }
 };
 
