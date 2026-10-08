@@ -18,6 +18,10 @@ const esc = v => String(v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;'
 const shapeName = p => p.shape === 'custom' ? (p.customName || p.name || '내 도안') : C.SHAPE_KO[p.shape] || '';
 const stars5 = n => '★★★★★'.slice(0, n) + '☆☆☆☆☆'.slice(0, 5 - n);
 const emoji = s => C.EMOJI[s] || '⭐';
+// 그림 아이콘(tools/gen_icons_nb.py) — 모양 14·업적·지도 핀. 이름이 없으면(내 도안 등) 이모지를 그대로 쓴다
+const ICONS = new Set([...Object.keys(C.EMOJI), ...K.achievements([]).map(a => a.id), 'pin_start', 'pin_draw', 'pin_end']);
+const ico = (name, fb) => ICONS.has(name) ? `<img class="ico" src="icons/${name}.png" alt="">` : fb;
+const shapeIco = s => ico(s, emoji(s));
 // 내 도안집 — 예전 판의 단일 「내 그림」은 도안 하나로 옮긴다
 const designs = () => store.get('designs', []);
 (() => {
@@ -69,7 +73,7 @@ if (plan && !plan.goLL) plan = null; // 10-07 첫 판 산책은 모양 길(loopL
 function setStart(lat, lon, why) {
   start = [lat, lon];
   if (startMarker) map.removeLayer(startMarker);
-  startMarker = pin(start, '🚩', '출발', 'var(--path-go)').addTo(map)
+  startMarker = pin(start, ico('pin_start', '🚩'), '출발', 'var(--path-go)').addTo(map)
     .on('click', () => { if (plan) return; map.removeLayer(startMarker); start = startMarker = null; clearEnd(); status('출발점을 지웠어요. 지도를 눌러 다시 골라 주세요.'); });
   status(`${why} 출발해요. 끝낼 곳이 따로 있으면 지도를 한 번 더 누르세요. 없으면 「산책 뽑기」.`);
 }
@@ -89,7 +93,7 @@ async function setEnd(lat, lon) {
   if (d < +store.get('radius', 1000) / 2) return tell('출발점과 너무 가까워서 한 바퀴 돌아 출발점으로 돌아와요.');
   end = [lat, lon];
   const far = d > END_MAX_M;
-  endMarker = pin(end, '', far ? '너무 멀어요' : '끝낼 곳', 'var(--path-back)', far ? 'below far' : 'below').addTo(map)
+  endMarker = pin(end, ico('pin_end', ''), far ? '너무 멀어요' : '끝낼 곳', 'var(--path-back)', far ? 'below far' : 'below').addTo(map)
     .on('click', () => { clearEnd(); status('끝낼 곳을 지웠어요. 출발점으로 돌아오는 산책이에요.'); });
   endMarker.getElement()?.setAttribute('aria-label', '끝낼 곳 — 누르면 지워요');
   status(far ? '거기까지는 걸어가기엔 멀어요. 조금 더 가까운 곳을 눌러 주세요.' : '여기가 끝낼 곳이에요. 「산책 뽑기」를 누르세요. 끝낼 곳 표시를 다시 누르면 지워져요.');
@@ -188,7 +192,7 @@ function drawPlan(p) {
   L.polyline(p.loopLL, { color: T('--accent'), weight: 6, opacity: .9 }).addTo(planLayer);
   const bb = L.polyline(p.fullLL).getBounds(), sp = start || p.goLL[0];
   const nearStart = map.distance(sp, p.loopStart) < map.distance(bb.getSouthWest(), bb.getNorthEast()) * 0.15; // 이름표가 「출발」에 가리던 일(지도 검토)
-  const ls = pin(p.loopStart, '✏️', '그리기 시작점', 'var(--accent)', nearStart ? '' : 'below').addTo(planLayer);
+  const ls = pin(p.loopStart, ico('pin_draw', '✏️'), '그리기 시작점', 'var(--accent)', nearStart ? '' : 'below').addTo(planLayer);
   if (nearStart) ls.setZIndexOffset(900);
   // 도는 방향: 모양 길의 15·40·65·90% 자리에 작은 화살표(걷는 순서 = loopLL 순서)
   const LL = p.loopLL, cum = [0];
@@ -198,17 +202,17 @@ function drawPlan(p) {
     const ang = Math.atan2(-(b[0] - a[0]), (b[1] - a[1]) * Math.cos(a[0] * Math.PI / 180)) * 180 / Math.PI;
     L.marker([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], { icon: L.divIcon({ className: 'arrowwrap', iconSize: null, html: `<div class="arrow" style="transform:rotate(${ang.toFixed(0)}deg)"></div>` }), interactive: false }).addTo(planLayer);
   }
-  if (p.oneWay) pin(p.backLL[p.backLL.length - 1], '', '끝낼 곳', 'var(--path-back)', 'below').addTo(planLayer);
+  if (p.oneWay) pin(p.backLL[p.backLL.length - 1], ico('pin_end', ''), '끝낼 곳', 'var(--path-back)', 'below').addTo(planLayer);
   // 도착 핀은 모양 위쪽 가장자리에 — 가운데에 두면 그릴 모양을 덮는다
   const topLat = Math.max(...p.tgtLL.map(q => q[0])), midLon = p.tgtLL.reduce((s, q) => s + q[1], 0) / p.tgtLL.length;
-  pin([topLat, midLon], emoji(p.shape), `${p.gold ? '반짝 ' : ''}${shapeName(p)} 그리는 곳`, p.gold ? 'var(--gold)' : 'var(--navy)', p.gold ? 'big gold' : 'big').addTo(planLayer);
+  pin([topLat, midLon], shapeIco(p.shape), `${p.gold ? '반짝 ' : ''}${shapeName(p)} 그리는 곳`, p.gold ? 'var(--gold)' : 'var(--navy)', p.gold ? 'big gold' : 'big').addTo(planLayer);
   matMarkers.clear();
   for (const m of p.mats || []) matMarkers.set(m.k, L.marker(m.ll, { icon: L.divIcon({ className: 'mpin t' + m.t, iconSize: null, html: '<div>단</div>' }) })
     .addTo(planLayer).bindTooltip(esc(`${m.n} · 시청 결제 ${esc(Number(m.v).toLocaleString())}건`)));
-  const e = emoji(p.shape), n = esc(shapeName(p));
+  const e = shapeIco(p.shape), n = esc(shapeName(p));
   $('info').innerHTML = `<div class="ttl">${p.gold ? '반짝 ' : ''}${e} ${n} 산책 <span class="sub">출발점에서 ${p.dir}쪽 ${p.distKm} km</span></div>
        <ol class="steps">
-         <li><i class="sw go"></i><span>그리기 시작점(✏️)까지 가기</span><b>${p.goKm} km</b></li>
+         <li><i class="sw go"></i><span>그리기 시작점(${ico('pin_draw', '✏️')})까지 가기</span><b>${p.goKm} km</b></li>
          <li><i class="sw loop"></i><span>${n} 그리며 한 바퀴(${p.turn} 방향)</span><b>${p.loopKm} km</b></li>
          <li><i class="sw back"></i><span>${p.oneWay ? `<span id="endPlace">${esc(p.endPlace || '끝낼 곳')}</span>까지 가기` : '출발점으로 돌아오기'}</span><b>${p.backKm} km</b></li>
        </ol>
@@ -390,7 +394,7 @@ $('bDone').onclick = () => {
     unlocked.length ? `업적: ${unlocked.map(a => esc(a.title)).join(' · ')}` : ''].filter(Boolean);
   const GR = ['', '가장 밝은 별', '밝은 별', '보통 별', '흐린 별', '아주 흐린 별'];
   $('info').innerHTML = `<div class="cele"><div class="bigstar${s.gold ? ' gold' : ''}" aria-hidden="true">★</div>
-      <div><b>${s.gold ? '반짝 별' : '별'}이 떴어요</b><br>${emoji(s.shape)} ${esc(shapeName(s))} · ${s.grade}등성(${GR[s.grade]})</div></div>
+      <div><b>${s.gold ? '반짝 별' : '별'}이 떴어요</b><br>${shapeIco(s.shape)} ${esc(shapeName(s))} · ${s.grade}등성(${GR[s.grade]})</div></div>
     <div class="rule">${notes[0]}</div>
     <div class="row" style="margin-top:8px"><button id="bSeeSky" class="primary">밤하늘에서 보기</button></div>
     <div class="row links"><button class="link" id="bCard">작품 카드 만들기</button><button class="link" id="bDex2">도감 보기</button></div>
@@ -439,7 +443,7 @@ function drawSky() {
     L.circleMarker(s.ll, { radius: 22, stroke: false, fillColor: s.gold ? T('--gold') : T('--star'), fillOpacity: .18, interactive: false }).addTo(skyLayer);
     L.circleMarker(s.ll, { radius: [0, 11, 8, 6, 4, 3][s.grade] || 3, color: s.gold ? T('--gold') : T('--star'), fillColor: s.gold ? T('--gold') : T('--star'), fillOpacity: 1, weight: s.gold ? 3 : 1 })
       .addTo(skyLayer).bindTooltip(esc(`${s.grade}등성 · ${shapeName(s)} · ${s.date} · 처음 걷는 길 ${s.newKm} km`));
-    L.marker(s.ll, { icon: L.divIcon({ className: 'skyewrap', iconSize: null, html: `<div class="skye">${emoji(s.shape)}</div>` }), interactive: false }).addTo(skyLayer);
+    L.marker(s.ll, { icon: L.divIcon({ className: 'skyewrap', iconSize: null, html: `<div class="skye">${shapeIco(s.shape)}</div>` }), interactive: false }).addTo(skyLayer);
   });
   let nc = 0;
   for (let i = 0; i + 5 <= S.length; i += 5) {
@@ -608,7 +612,7 @@ function renderDex() {
   $('dexSum').innerHTML = `<div style="font-size:14px;margin:6px 0 4px">모양 ${D.got}/${D.total} · 업적 ${okA}/${A.length} · 동네 도장 ${ST.length}곳 · 내 도안 ${designs().length}개</div>
     <div class="bar"><i style="width:${pct(D.got / D.total)}%"></i></div>`;
   const cardHtml = (c, extra = '') => `<div class="card${c.got ? '' : ' locked'}${c.gold ? ' gold' : ''}">
-      ${c.gold ? '<span class="tag">✨</span>' : ''}<div class="e">${c.emoji}</div>
+      ${c.gold ? '<span class="tag">✨</span>' : ''}<div class="e">${ico(c.key, c.emoji)}</div>
       <div class="n">${esc(c.name)}</div>
       <div class="m">${!c.got ? hintOf(c.key) : c.count ? `${c.count}번 · ${c.best}등성` : '안 걸었어요'}</div>${extra}</div>`; // 못 모은 칸도 흐린 그림·이름을 보여 줘 무엇을 모을지 알게 한다
   $('suRing').innerHTML = suSvg(S);
@@ -619,7 +623,7 @@ function renderDex() {
     return cardHtml({ ...c, got: true }, `<button class="${id === act && store.get('pick', 'all') === 'custom' ? '' : 'sub'}" data-use="${id}">${id === act && store.get('pick', 'all') === 'custom' ? '✔ 다음 산책' : '이걸로 걷기'}</button>
       ${c.count ? `<button class="sub" data-card="${c.key}">작품 카드</button>` : ''}<button class="sub" data-del="${id}">지우기</button>`);
   }).join('') : '<p style="grid-column:1/-1;padding:var(--space-sm);font-size:13px;color:var(--sub)">아직 도안이 없어요. 손으로 그리거나 그림을 올려 보세요.</p>';
-  const achRow = a => `<div class="ach${a.ok ? '' : ' no'}"><div class="e">${a.emoji}</div>
+  const achRow = a => `<div class="ach${a.ok ? '' : ' no'}"><div class="e${ICONS.has(a.id) ? ' i' : ''}">${ico(a.id, a.emoji)}</div>
       <div class="t"><b>${esc(a.title)}</b> ${a.ok ? '<span class="ok">✓ 완료</span>' : `<span class="pc">${pct(a.progress)}%</span>`}<br><span style="color:var(--sub)">${esc(a.desc)}</span>
       ${a.ok ? '' : `<div class="bar" style="margin-top:4px" role="progressbar" aria-valuenow="${pct(a.progress)}" aria-valuemin="0" aria-valuemax="100" aria-label="${esc(a.title)} 진행"><i style="width:${pct(a.progress)}%"></i></div>`}</div></div>`;
   const todo = A.filter(a => !a.ok).sort((x, y) => y.progress - x.progress), doneA = A.filter(a => a.ok);
@@ -718,7 +722,8 @@ async function saveCard(s) {
   }
   g.restore();
   g.textAlign = 'center'; g.fillStyle = '#fff';
-  g.font = '120px serif'; g.fillText(emoji(s.shape), W / 2, 170);
+  const im = ICONS.has(s.shape) ? await new Promise(r => { const i = new Image(); i.onload = () => r(i); i.onerror = () => r(null); i.src = `icons/${s.shape}.png`; }) : null;
+  if (im) g.drawImage(im, W / 2 - 80, 50, 160, 160); else { g.font = '120px serif'; g.fillText(emoji(s.shape), W / 2, 170); }
   g.font = 'bold 64px "IBM Plex Sans KR", sans-serif'; g.fillText(`${s.gold ? '반짝 ' : ''}${shapeName(s)}`, W / 2, 1100);
   const suc = K.suName(K.suIndex(s.ll)); g.font = '600 40px "IBM Plex Sans KR", sans-serif'; g.fillStyle = '#f2d98a'; g.fillText(`${suc.group} ${suc.name}수`, W / 2, 1160); g.fillStyle = '#fff';
   g.font = '36px "IBM Plex Sans KR", sans-serif'; g.fillStyle = '#c9d6ff';
