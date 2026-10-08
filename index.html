@@ -129,7 +129,9 @@ button.primary:hover{background:var(--accent-hover)}
 .arrow{width:0;height:0;margin:-6px 0 0 -5px;border-left:11px solid var(--accent);border-top:6px solid transparent;border-bottom:6px solid transparent;filter:drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff);transform-origin:5px 6px}
 #suRing text.hg{font-size:9px;font-weight:400;fill:var(--ink-2)}
 #suRing text.hg.on{fill:var(--on-accent)}
-#suRing path{cursor:pointer}
+#suRing path{cursor:pointer;-webkit-tap-highlight-color:transparent}
+#suRing text{pointer-events:none;user-select:none;-webkit-user-select:none} /* 칸 위 글자가 탭을 가로채 반응이 없던 일(10-08) */
+#suRing .w.sel{stroke:var(--accent);stroke-width:3}
 
 #info{max-width:520px;margin:0 auto var(--space-sm);font-size:14px;color:var(--sub);line-height:1.55}
 #info:empty{display:none}

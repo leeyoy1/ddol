@@ -929,6 +929,7 @@ const trPrev = plan && store.get('track', null);
 function hintOf(key) { return C.CATEGORY.geo.includes(key) ? '도형 · 짧게도 돼요' : C.CATEGORY.animal.includes(key) ? '동물 · 600 m 넘게' : C.CATEGORY.plant.includes(key) ? '식물 · 600 m 넘게' : '아직이에요'; }
 $('suRing').addEventListener('click', e => {
   const el = e.target.closest('path[data-i]'); if (!el) return;
+  $('suRing').querySelectorAll('.sel').forEach(x => x.classList.remove('sel')); el.classList.add('sel'); el.parentNode.insertBefore(el, el.parentNode.querySelector('text')); // 고른 칸 테두리가 이웃 칸에 묻히지 않게 — 칸들 중 맨 위, 글자보다는 아래
   const i = +el.dataset.i, n = K.suName(i), c = K.suFilled(store.get('stars', { stars: [] }).stars).get(i) || 0;
   $('suInfo').textContent = `${n.group} · ${n.name}수 · ${c ? `별 ${c}개` : '아직 비어 있어요'}`;
 });
