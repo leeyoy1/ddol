@@ -107,16 +107,25 @@ map.on('click', e => {
   setEnd(e.latlng.lat, e.latlng.lng);
 });
 
+// 지금 자리: 정밀(GPS) 8초 → 안 되면 대략(와이파이·기지국, 5분 안 기록도 받음) 10초. 권한 거부(code 1)는 다시 묻지 않는다
+function hereNow() {
+  const get = o => new Promise((ok, no) => navigator.geolocation.getCurrentPosition(ok, no, o));
+  return get({ enableHighAccuracy: true, timeout: 8000 })
+    .catch(e => e && e.code === 1 ? Promise.reject(e) : get({ enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 }))
+    .then(p => [p.coords.latitude, p.coords.longitude]);
+}
+const geoFail = e => e && e.code === 1
+  ? '위치 권한이 꺼져 있어요. 폰 설정의 「위치」와 브라우저의 이 사이트 위치 허용을 켜 주세요. 지금은 지도를 눌러 출발할 곳을 찍어도 돼요.'
+  : '위치를 받지 못했어요. 실내라면 창가나 밖에서 다시 눌러 주세요. 지도를 눌러 출발할 곳을 찍어도 돼요.';
 $('bLoc').onclick = () => {
   if (watchId != null) { follow = true; if (lastLL) map.setView(lastLL, Math.max(map.getZoom(), 17)); return status('내 위치를 따라가요. 지도를 끌면 멈춰요.'); }
   if (!navigator.geolocation) return status('이 브라우저는 위치를 알려 주지 않아요. 지도를 눌러 출발할 곳을 찍어 주세요.');
   status('위치를 찾는 중…');
-  navigator.geolocation.getCurrentPosition(p => {
-    const ll = [p.coords.latitude, p.coords.longitude];
+  hereNow().then(ll => {
     map.setView(ll, 16);
     if (plan) return status('지금 자리예요.');
     setStart(...ll, '지금 자리에서');
-  }, () => status('위치를 받지 못했어요. 지도를 눌러 출발할 곳을 찍어 주세요.'), { enableHighAccuracy: true, timeout: 15000 });
+  }, e => status(geoFail(e)));
 };
 map.on('dragstart', () => { if (watchId != null) follow = false; }); // 손으로 지도를 끌면 따라가기를 멈춘다
 
@@ -281,9 +290,10 @@ $('bPlan').onclick = async () => {
   try {
     if (!start) { // 지도를 안 눌렀으면 지금 자리에서(위치를 못 받으면 지도 가운데에서) — 첫 화면에서 「무엇부터 누르나」가 갈리지 않게(10-08 가상 테스트 5/5)
       status('지금 자리를 찾는 중…');
-      const here = await new Promise(ok => navigator.geolocation ? navigator.geolocation.getCurrentPosition(p => ok([p.coords.latitude, p.coords.longitude]), () => ok(null), { enableHighAccuracy: true, timeout: 8000 }) : ok(null));
+      let fail = null;
+      const here = navigator.geolocation ? await hereNow().catch(e => { fail = e; return null; }) : null;
       if (mode !== 'plan') return; // 기다리는 사이 밤하늘로 갔으면 멈춘다 — 밤하늘에 출발 핀을 그리지 않는다
-      if (!here) return status('위치를 받지 못했어요. 지도를 눌러 출발할 곳을 찍고 다시 「산책 뽑기」를 누르세요.'); // 말없이 시청 둘레를 뽑던 일(디자이너 검토)
+      if (!here) return status(geoFail(fail) + ' 그다음 「산책 뽑기」를 다시 누르세요.'); // 말없이 시청 둘레를 뽑던 일(디자이너 검토)
       setStart(...here, '지금 자리에서');
     }
     const radius = +store.get('radius', 1000), size = +store.get('size', 400);
